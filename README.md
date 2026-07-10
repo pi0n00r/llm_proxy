@@ -191,8 +191,8 @@ mode = "last"
 [stream_override]
 mode = "passthrough"
 
-[ollama_thinking_override]
-mode = "passthrough"
+[ollama_overrides]
+thinking = "passthrough"
 ```
 
 ### Configuration Options
@@ -337,8 +337,8 @@ mode = "last"
 mode = "always"
 ```
 
-#### Ollama Thinking Override
-- `mode`: Force the Ollama-native `think` flag on outbound `/api/chat` requests (default: `"passthrough"`)
+#### Ollama Overrides
+- `thinking`: Force the Ollama-native `think` flag on outbound `/api/chat` requests (default: `"passthrough"`)
 
 **Mode Options:**
 - `"passthrough"`: Do not change `think`; preserve a client-supplied value if present
@@ -352,8 +352,8 @@ mode = "always"
 
 **Example Configuration:**
 ```toml
-[ollama_thinking_override]
-mode = "off"
+[ollama_overrides]
+thinking = "off"
 ```
 
 #### Gemma 4 Fix

@@ -28,7 +28,7 @@ func TestOllamaThinkingOverrideForcesChatThink(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			spy, db, cfg := newStreamOverrideTest(t)
-			cfg.OllamaThinkingOverride.Mode = tt.mode
+			cfg.OllamaOverrides.Thinking = tt.mode
 
 			rec := serveThinkingOverrideRequest(t, tt.endpoint, spy, db, cfg, nil)
 			if rec.Code != http.StatusOK {
@@ -48,7 +48,7 @@ func TestOllamaThinkingOverridePassthrough(t *testing.T) {
 	for _, endpoint := range []string{"openai_chat", "ollama_chat"} {
 		t.Run(endpoint+" leaves absent think nil", func(t *testing.T) {
 			spy, db, cfg := newStreamOverrideTest(t)
-			cfg.OllamaThinkingOverride.Mode = "passthrough"
+			cfg.OllamaOverrides.Thinking = "passthrough"
 
 			rec := serveThinkingOverrideRequest(t, endpoint, spy, db, cfg, nil)
 			if rec.Code != http.StatusOK {
@@ -61,7 +61,7 @@ func TestOllamaThinkingOverridePassthrough(t *testing.T) {
 
 		t.Run(endpoint+" preserves client sent think", func(t *testing.T) {
 			spy, db, cfg := newStreamOverrideTest(t)
-			cfg.OllamaThinkingOverride.Mode = "passthrough"
+			cfg.OllamaOverrides.Thinking = "passthrough"
 			clientThink := true
 
 			rec := serveThinkingOverrideRequest(t, endpoint, spy, db, cfg, &clientThink)

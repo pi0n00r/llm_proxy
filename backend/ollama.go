@@ -110,6 +110,8 @@ func (o *OllamaBackend) Chat(ctx context.Context, req models.ChatRequest) (<-cha
 	respChan := make(chan models.ChatResponse, 10)
 	metadata := &BackendMetadata{}
 
+	req.Messages = normalizeToolCallArgumentsToObjects(req.Messages)
+
 	data, err := json.Marshal(req)
 	if err != nil {
 		close(respChan)
@@ -191,6 +193,62 @@ func (o *OllamaBackend) Chat(ctx context.Context, req models.ChatRequest) (<-cha
 	}()
 
 	return respChan, metadata, nil
+}
+
+// normalizeToolCallArgumentsToObjects returns messages with every
+// tool_calls[].function.arguments JSON string parsed into the object form
+// expected by Ollama's native /api/chat endpoint. Invalid JSON strings and
+// values already in object form are left unchanged.
+func normalizeToolCallArgumentsToObjects(messages []models.Message) []models.Message {
+	out := make([]models.Message, len(messages))
+	for i, msg := range messages {
+		out[i] = msg
+		if len(msg.ToolCalls) == 0 {
+			continue
+		}
+		out[i].ToolCalls = convertToolCallArgsToObjects(msg.ToolCalls)
+	}
+	return out
+}
+
+func convertToolCallArgsToObjects(toolCalls []interface{}) []interface{} {
+	converted := make([]interface{}, len(toolCalls))
+	for i, tc := range toolCalls {
+		converted[i] = tc
+
+		tcMap, ok := tc.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		fnMap, ok := tcMap["function"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		argStr, ok := fnMap["arguments"].(string)
+		if !ok {
+			continue
+		}
+
+		var argsObj interface{}
+		if err := json.Unmarshal([]byte(argStr), &argsObj); err != nil {
+			continue
+		}
+
+		newFn := make(map[string]interface{}, len(fnMap))
+		for k, v := range fnMap {
+			newFn[k] = v
+		}
+		newFn["arguments"] = argsObj
+
+		newTc := make(map[string]interface{}, len(tcMap))
+		for k, v := range tcMap {
+			newTc[k] = v
+		}
+		newTc["function"] = newFn
+
+		converted[i] = newTc
+	}
+	return converted
 }
 
 // ListModels returns available models from Ollama

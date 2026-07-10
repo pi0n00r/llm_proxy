@@ -27,7 +27,7 @@ func applyChatFeatures(req *models.ChatRequest, cfg *config.Config) {
 // "passthrough" leaves whatever the client sent. Only affects the Ollama backend;
 // the OpenAI backend builds its own request and never forwards think.
 func applyOllamaThinkingOverride(req *models.ChatRequest, cfg *config.Config) {
-	switch cfg.OllamaThinkingOverride.Mode {
+	switch cfg.OllamaOverrides.Thinking {
 	case ollamaThinkingOff:
 		v := false
 		req.Think = &v
