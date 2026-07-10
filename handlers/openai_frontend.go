@@ -79,6 +79,7 @@ func (h *OpenAIChatCompletionsHandler) ServeHTTP(w http.ResponseWriter, r *http.
 		Messages:  req.Messages,
 		Stream:    req.Stream,
 		Tools:     req.Tools,
+		Think:     openAIRawThink(rawReq),
 		OpenAIRaw: rawReq,
 	}
 	if req.MaxTokens > 0 {
@@ -291,6 +292,21 @@ func writeSSE(w io.Writer, capture *strings.Builder, data string) {
 	line := fmt.Sprintf("data: %s\n\n", data)
 	fmt.Fprint(w, line)
 	capture.WriteString(line)
+}
+
+func openAIRawThink(raw map[string]json.RawMessage) *bool {
+	if raw == nil {
+		return nil
+	}
+	data, ok := raw["think"]
+	if !ok {
+		return nil
+	}
+	var think bool
+	if err := json.Unmarshal(data, &think); err != nil {
+		return nil
+	}
+	return &think
 }
 
 func syncOpenAIRawChatRequest(req *models.ChatRequest) {

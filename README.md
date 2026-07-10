@@ -190,6 +190,9 @@ mode = "last"
 
 [stream_override]
 mode = "passthrough"
+
+[ollama_thinking_override]
+mode = "passthrough"
 ```
 
 ### Configuration Options
@@ -332,6 +335,25 @@ mode = "last"
 ```toml
 [stream_override]
 mode = "always"
+```
+
+#### Ollama Thinking Override
+- `mode`: Force the Ollama-native `think` flag on outbound `/api/chat` requests (default: `"passthrough"`)
+
+**Mode Options:**
+- `"passthrough"`: Do not change `think`; preserve a client-supplied value if present
+- `"off"`: Force `think: false` to disable model reasoning
+- `"on"`: Force `think: true`
+
+**Behavior:**
+- Applies only to chat endpoints (`/api/chat` and `/v1/chat/completions`), not `/api/generate`
+- Only materializes when `backend.type = "ollama"`, because Ollama exposes thinking control on native `/api/chat`; the OpenAI backend has no equivalent and does not forward `think`
+- Useful for OpenAI-compatible clients that cannot toggle Ollama thinking through `/v1/chat/completions`, while the proxy can still set the native Ollama field on the backend request
+
+**Example Configuration:**
+```toml
+[ollama_thinking_override]
+mode = "off"
 ```
 
 #### Gemma 4 Fix

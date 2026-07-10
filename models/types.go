@@ -49,6 +49,7 @@ type ChatRequest struct {
 	Template  string                     `json:"template,omitempty"`
 	Tools     []interface{}              `json:"tools,omitempty"`
 	KeepAlive string                     `json:"keep_alive,omitempty"`
+	Think     *bool                      `json:"think,omitempty"` // Ollama-native "thinking" toggle; nil = leave to backend default
 	OpenAIRaw map[string]json.RawMessage `json:"-"`
 }
 

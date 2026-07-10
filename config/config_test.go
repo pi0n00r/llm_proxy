@@ -155,6 +155,60 @@ mode = "sometimes"
 	}
 }
 
+func TestLoadOllamaThinkingOverrideConfig(t *testing.T) {
+	path := writeTestConfig(t, `
+[backend]
+type = "ollama"
+endpoint = "http://localhost:11434"
+
+[ollama_thinking_override]
+mode = "off"
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.OllamaThinkingOverride.Mode != "off" {
+		t.Fatalf("OllamaThinkingOverride.Mode = %q, want off", cfg.OllamaThinkingOverride.Mode)
+	}
+}
+
+func TestLoadDefaultsOllamaThinkingOverrideMode(t *testing.T) {
+	path := writeTestConfig(t, `
+[backend]
+type = "ollama"
+endpoint = "http://localhost:11434"
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.OllamaThinkingOverride.Mode != "passthrough" {
+		t.Fatalf("OllamaThinkingOverride.Mode = %q, want passthrough", cfg.OllamaThinkingOverride.Mode)
+	}
+}
+
+func TestLoadRejectsInvalidOllamaThinkingOverrideMode(t *testing.T) {
+	path := writeTestConfig(t, `
+[backend]
+type = "ollama"
+endpoint = "http://localhost:11434"
+
+[ollama_thinking_override]
+mode = "false"
+`)
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("Load() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "ollama_thinking_override.mode") {
+		t.Fatalf("Load() error = %v, want ollama_thinking_override.mode error", err)
+	}
+}
+
 func TestLoadAppliesOperationalDefaults(t *testing.T) {
 	path := writeTestConfig(t, `
 [backend]

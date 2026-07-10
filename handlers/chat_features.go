@@ -8,12 +8,37 @@ import (
 	"llm_proxy/models"
 )
 
+const (
+	ollamaThinkingOff = "off"
+	ollamaThinkingOn  = "on"
+)
+
 func applyChatFeatures(req *models.ChatRequest, cfg *config.Config) {
 	if cfg.ChatTextInjection.Enabled && cfg.ChatTextInjection.Text != "" {
 		applyChatTextInjection(req, cfg)
 	}
 	if len(cfg.Backend.ToolBlacklist) > 0 {
 		filterChatTools(req, cfg)
+	}
+	applyOllamaThinkingOverride(req, cfg)
+}
+
+// applyOllamaThinkingOverride forces the Ollama-native "think" flag when configured.
+// "passthrough" leaves whatever the client sent. Only affects the Ollama backend;
+// the OpenAI backend builds its own request and never forwards think.
+func applyOllamaThinkingOverride(req *models.ChatRequest, cfg *config.Config) {
+	switch cfg.OllamaThinkingOverride.Mode {
+	case ollamaThinkingOff:
+		v := false
+		req.Think = &v
+	case ollamaThinkingOn:
+		v := true
+		req.Think = &v
+	default:
+		return
+	}
+	if cfg.Server.Verbose {
+		log.Printf("[VERBOSE] Ollama thinking override: think=%v", *req.Think)
 	}
 }
 

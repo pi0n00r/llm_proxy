@@ -8,14 +8,15 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Server              ServerConfig              `toml:"server"`
-	Backend             BackendConfig             `toml:"backend"`
-	BackendOpenAI       BackendOpenAIConfig       `toml:"backend_openai"`
-	Database            DatabaseConfig            `toml:"database"`
-	RequestSanitization RequestSanitizationConfig `toml:"request_sanitization"`
-	ChatTextInjection   ChatTextInjectionConfig   `toml:"chat_text_injection"`
-	StreamOverride      StreamOverrideConfig      `toml:"stream_override"`
-	Gemma4Fix           Gemma4FixConfig           `toml:"gemma_4_fix"`
+	Server                 ServerConfig                 `toml:"server"`
+	Backend                BackendConfig                `toml:"backend"`
+	BackendOpenAI          BackendOpenAIConfig          `toml:"backend_openai"`
+	Database               DatabaseConfig               `toml:"database"`
+	RequestSanitization    RequestSanitizationConfig    `toml:"request_sanitization"`
+	ChatTextInjection      ChatTextInjectionConfig      `toml:"chat_text_injection"`
+	StreamOverride         StreamOverrideConfig         `toml:"stream_override"`
+	OllamaThinkingOverride OllamaThinkingOverrideConfig `toml:"ollama_thinking_override"`
+	Gemma4Fix              Gemma4FixConfig              `toml:"gemma_4_fix"`
 }
 
 // ServerConfig holds the server settings
@@ -68,6 +69,12 @@ type StreamOverrideConfig struct {
 	Mode string `toml:"mode"` // "passthrough", "always", or "never"
 }
 
+// OllamaThinkingOverrideConfig forces the Ollama-native "think" flag on outbound
+// /api/chat requests. Ollama-only: the OpenAI backend has no equivalent and ignores it.
+type OllamaThinkingOverrideConfig struct {
+	Mode string `toml:"mode"` // "passthrough", "off", or "on"
+}
+
 // Gemma4FixConfig controls the self-contained mitigation for known Gemma 4 +
 // vLLM streaming corruption bugs (leaked tool-call control tokens and leaked
 // reasoning-channel tokens in the content field). Only relevant when
@@ -116,6 +123,12 @@ func Load(path string) (*Config, error) {
 		config.StreamOverride.Mode != "never" {
 		return nil, fmt.Errorf("invalid stream_override.mode: %s (must be 'passthrough', 'always', or 'never')", config.StreamOverride.Mode)
 	}
+	if config.OllamaThinkingOverride.Mode != "" &&
+		config.OllamaThinkingOverride.Mode != "passthrough" &&
+		config.OllamaThinkingOverride.Mode != "off" &&
+		config.OllamaThinkingOverride.Mode != "on" {
+		return nil, fmt.Errorf("invalid ollama_thinking_override.mode: %s (must be 'passthrough', 'off', or 'on')", config.OllamaThinkingOverride.Mode)
+	}
 
 	// Set defaults
 	if config.Server.Host == "" {
@@ -144,6 +157,9 @@ func Load(path string) (*Config, error) {
 	}
 	if config.StreamOverride.Mode == "" {
 		config.StreamOverride.Mode = "passthrough"
+	}
+	if config.OllamaThinkingOverride.Mode == "" {
+		config.OllamaThinkingOverride.Mode = "passthrough"
 	}
 
 	return &config, nil

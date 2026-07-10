@@ -42,6 +42,14 @@ mode = "last"
 # "never" always asks the backend for a single non-streamed response
 mode = "passthrough"
 
+[ollama_thinking_override]
+# Force the Ollama-native "think" flag on outbound /api/chat requests.
+# Only affects the Ollama backend (the OpenAI backend has no equivalent).
+#   "passthrough" - do not touch think (default)
+#   "off"         - force think:false (disable model reasoning)
+#   "on"          - force think:true
+mode = "passthrough"
+
 [gemma_4_fix]
 # Self-contained mitigation for known Gemma 4 + vLLM streaming corruption bugs:
 # leaked tool-call control tokens and leaked reasoning-channel tokens showing
