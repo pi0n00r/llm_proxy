@@ -119,10 +119,17 @@ func main() {
 		"MaxTokensPolicy":      cfg.RequestSanitization.MaxTokensPolicy,
 		"MaxTokensLimit":       cfg.RequestSanitization.MaxTokensLimit,
 		"StreamOverrideMode":   cfg.StreamOverride.Mode,
+		"OllamaThinkingMode":   cfg.OllamaOverrides.Thinking,
 		"Gemma4FixEnabled":     cfg.Gemma4Fix.Enabled,
 		"TextInjectionEnabled": cfg.ChatTextInjection.Enabled,
 		"TextInjectionText":    cfg.ChatTextInjection.Text,
 		"TextInjectionMode":    cfg.ChatTextInjection.Mode,
+		"LogMessages":          cfg.Server.LogMessages,
+		"LogRawRequests":       cfg.Server.LogRawRequests,
+		"LogRawResponses":      cfg.Server.LogRawResponses,
+		"Verbose":              cfg.Server.Verbose,
+		"DatabaseMaxRequests":  cfg.Database.MaxRequests,
+		"DatabaseCleanupMins":  cfg.Database.CleanupInterval,
 	}
 
 	webHandler := handlers.NewWebHandler(db, homeData)

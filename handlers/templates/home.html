@@ -226,6 +226,12 @@
                             <div class="info-label">Stream Override</div>
                             <div class="info-value text">{{.StreamOverrideMode}}</div>
                         </div>
+                        {{if eq .BackendType "ollama"}}
+                        <div class="info-item">
+                            <div class="info-label">Ollama Thinking</div>
+                            <div class="info-value text">{{.OllamaThinkingMode}}</div>
+                        </div>
+                        {{end}}
                         {{if eq .BackendType "openai"}}
                         <div class="info-item">
                             <div class="info-label">Force Prompt Cache</div>
@@ -258,8 +264,47 @@
                             </div>
                         </div>
                         <div class="info-item">
-                            <div class="info-label">Database</div>
+                            <div class="info-label">Verbose Logs</div>
+                            <div class="info-value text">
+                                {{if .Verbose}}<span class="badge badge-on">enabled</span>{{else}}<span class="badge badge-neutral">disabled</span>{{end}}
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Message Logs</div>
+                            <div class="info-value text">
+                                {{if .LogMessages}}<span class="badge badge-on">enabled</span>{{else}}<span class="badge badge-neutral">disabled</span>{{end}}
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Raw Request Logs</div>
+                            <div class="info-value text">
+                                {{if .LogRawRequests}}<span class="badge badge-on">enabled</span>{{else}}<span class="badge badge-neutral">disabled</span>{{end}}
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Raw Response Logs</div>
+                            <div class="info-value text">
+                                {{if .LogRawResponses}}<span class="badge badge-on">enabled</span>{{else}}<span class="badge badge-neutral">disabled</span>{{end}}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Database -->
+                <div class="config-group">
+                    <div class="config-group-title">Database</div>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">Path</div>
                             <div class="info-value">{{.DatabasePath}}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Max Requests</div>
+                            <div class="info-value text">{{.DatabaseMaxRequests}}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Cleanup Interval</div>
+                            <div class="info-value text">{{.DatabaseCleanupMins}} min</div>
                         </div>
                     </div>
                 </div>
