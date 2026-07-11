@@ -85,6 +85,14 @@ func TestDatabaseUsesWALAndBusyTimeout(t *testing.T) {
 	}
 }
 
+func TestSQLiteDSNPreservesRelativePath(t *testing.T) {
+	got := sqliteDSN("./data/llm_proxy.db")
+	want := "file:./data/llm_proxy.db?_pragma=busy_timeout%285000%29"
+	if got != want {
+		t.Fatalf("sqliteDSN() = %q, want %q", got, want)
+	}
+}
+
 func TestLogWaitsForConcurrentWriter(t *testing.T) {
 	db, err := New(filepath.Join(t.TempDir(), "llm_proxy.db"))
 	if err != nil {

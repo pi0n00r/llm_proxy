@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -70,7 +71,16 @@ func sqliteDSN(path string) string {
 	if strings.HasPrefix(path, "file:") {
 		dsn = path
 	} else {
-		dsn = (&url.URL{Scheme: "file", Path: path}).String()
+		databaseURL := &url.URL{Scheme: "file"}
+		if filepath.IsAbs(path) {
+			databaseURL.Path = path
+		} else {
+			// A relative URL path is rendered as file://./..., which makes
+			// SQLite treat "." as an invalid URI authority. Opaque renders
+			// the intended file:./... form instead.
+			databaseURL.Opaque = path
+		}
+		dsn = databaseURL.String()
 	}
 	separator := "?"
 	if strings.Contains(dsn, "?") {
