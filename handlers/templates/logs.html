@@ -24,7 +24,7 @@
         }
         header {
             background: white;
-            padding: 20px;
+            padding: 18px 22px;
             margin-bottom: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -33,10 +33,11 @@
             display: flex;
             align-items: center;
             gap: 15px;
-            margin-bottom: 10px;
+            justify-content: space-between;
         }
+        .brand { display: flex; align-items: center; gap: 14px; }
         .logo {
-            height: 78px;
+            height: 64px;
             width: auto;
         }
         .logo-link {
@@ -46,10 +47,20 @@
         h1 {
             color: #2c3e50;
             margin: 0;
+            font-size: 28px;
         }
         .stats {
-            color: #7f8c8d;
-            font-size: 14px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .stat {
+            padding: 5px 10px;
+            color: #61717c;
+            background: #f2f5f7;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 650;
         }
         .table-container {
             background: white;
@@ -60,36 +71,51 @@
         table {
             width: 100%;
             border-collapse: collapse;
+            table-layout: fixed;
         }
         thead {
             background: #34495e;
             color: white;
         }
         th {
-            padding: 12px;
+            padding: 12px 16px;
             text-align: left;
             font-weight: 600;
             font-size: 14px;
         }
         td {
-            padding: 12px;
+            padding: 15px 16px;
             border-bottom: 1px solid #ecf0f1;
             font-size: 13px;
+            vertical-align: middle;
         }
-        tr:hover {
-            background: #f8f9fa;
+        tbody tr { transition: background .15s, box-shadow .15s; }
+        tbody tr:hover {
+            background: #f6faff;
+            box-shadow: inset 4px 0 #3498db;
         }
+        .request-column { width: 190px; }
+        .route-column { width: 245px; }
+        .result-column { width: 150px; }
+        .request-id { font-weight: 750; font-size: 14px; }
         .timestamp {
             font-family: "Courier New", monospace;
             color: #7f8c8d;
             white-space: nowrap;
+            font-size: 11px;
+            margin-top: 3px;
         }
         .endpoint {
-            font-weight: 500;
+            display: block;
+            font-weight: 700;
             color: #2980b9;
+            overflow-wrap: anywhere;
         }
         .model {
-            color: #27ae60;
+            color: #58707d;
+            font-size: 12px;
+            margin-top: 3px;
+            overflow-wrap: anywhere;
         }
         .status-ok {
             color: #27ae60;
@@ -100,9 +126,13 @@
             font-weight: 600;
         }
         .latency {
-            color: #8e44ad;
+            color: #667680;
             font-family: "Courier New", monospace;
+            font-size: 12px;
+            margin-left: 6px;
         }
+        .result-line { display: flex; align-items: baseline; }
+        .flags { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
         .stream-badge {
             display: inline-block;
             padding: 2px 8px;
@@ -122,9 +152,8 @@
             color: white;
         }
         .truncated {
-            color: #95a5a6;
-            font-family: "Courier New", monospace;
-            font-size: 12px;
+            color: #536873;
+            font-size: 13px;
         }
         .preview-cell {
             display: flex;
@@ -132,6 +161,9 @@
             gap: 6px;
             flex-wrap: wrap;
         }
+        .preview-link { color: inherit; display: block; }
+        .preview-link:hover { text-decoration: none; color: #234f6b; }
+        .preview-empty { color: #a4afb5; font-style: italic; }
         .preview-thumb {
             max-width: 32px;
             max-height: 32px;
@@ -176,59 +208,74 @@
         a:hover {
             text-decoration: underline;
         }
+        @media (max-width: 800px) {
+            .container { padding: 10px; }
+            header { padding: 14px; }
+            .header-content { align-items: flex-start; gap: 10px; }
+            .brand { align-items: center; }
+            .logo { height: 48px; }
+            h1 { font-size: 21px; }
+            .stats { justify-content: flex-end; }
+            thead { display: none; }
+            table, tbody, tr, td { display: block; width: 100%; }
+            tbody tr { padding: 14px; border-bottom: 1px solid #dfe6e9; }
+            td { border: 0; padding: 4px 0; }
+            td::before { content: attr(data-label); display: inline-block; width: 72px; color: #89969e; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; vertical-align: top; }
+            td > .cell-content { display: inline-block; width: calc(100% - 78px); }
+            .request-column, .route-column, .result-column { width: auto; }
+            .preview-cell { display: inline-flex; vertical-align: top; width: calc(100% - 78px); }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
             <div class="header-content">
-                <a href="/" class="logo-link" title="Back to homepage">
-                    <img src="/static/llama.png" alt="LLM Proxy Logo" class="logo">
-                </a>
-                <h1>LLM Proxy Request Log</h1>
+                <div class="brand">
+                    <a href="/" class="logo-link" title="Back to homepage">
+                        <img src="/static/llama.png" alt="LLM Proxy Logo" class="logo">
+                    </a>
+                    <h1>Request Log</h1>
+                </div>
+                <div class="stats"><span class="stat">{{.TotalCount}} requests</span><span class="stat">Page {{.CurrentPage}} of {{.TotalPages}}</span></div>
             </div>
-            <div class="stats">Total Requests: {{.TotalCount}} | Page {{.CurrentPage}} of {{.TotalPages}}</div>
         </header>
 
         <div class="table-container">
             <table>
                 <thead>
                     <tr>
-                        <th>ID</th>
-                        <th>Timestamp</th>
-                        <th>Endpoint</th>
-                        <th>Model</th>
-                        <th>Status</th>
-                        <th>Latency</th>
-                        <th>Flags</th>
-                        <th>Preview</th>
+                        <th class="request-column">Request</th>
+                        <th class="route-column">Route</th>
+                        <th class="result-column">Result</th>
+                        <th>Conversation preview</th>
                     </tr>
                 </thead>
                 <tbody>
                     {{range .Entries}}
                     <tr>
-                        <td><a href="/logs/details?id={{.ID}}">#{{.ID}}</a></td>
-                        <td class="timestamp">{{.Timestamp.Format "2006-01-02 15:04:05"}}</td>
-                        <td class="endpoint">{{.Endpoint}}</td>
-                        <td class="model">{{.Model}}</td>
-                        <td class="{{if eq .StatusCode 200}}status-ok{{else}}status-error{{end}}">{{.StatusCode}}</td>
-                        <td class="latency">{{.LatencyMs}}ms</td>
-                        <td>
-                            {{if .Stream}}<span class="stream-badge">STREAM</span>{{end}}
-                            {{if .Error}}<span class="error-badge">ERROR</span>{{end}}
+                        <td data-label="Request">
+                            <div class="cell-content"><a class="request-id" href="/logs/details?id={{.ID}}">#{{.ID}}</a><div class="timestamp">{{.Timestamp.Format "2006-01-02"}} · {{.Timestamp.Format "15:04:05"}}</div></div>
                         </td>
-                        <td class="truncated">
-                            <div class="preview-cell">
+                        <td data-label="Route">
+                            <div class="cell-content"><span class="endpoint">{{.Endpoint}}</span><div class="model">{{.Model}}</div></div>
+                        </td>
+                        <td data-label="Result">
+                            <div class="cell-content"><div class="result-line"><span class="{{if statusOK .StatusCode}}status-ok{{else}}status-error{{end}}">{{.StatusCode}}</span><span class="latency">{{.LatencyMs}}ms</span></div>
+                            <div class="flags">{{if .Stream}}<span class="stream-badge">STREAM</span>{{end}}{{if .Error}}<span class="error-badge">ERROR</span>{{end}}</div></div>
+                        </td>
+                        <td data-label="Preview" class="truncated">
+                            <a class="preview-link" href="/logs/details?id={{.ID}}"><div class="preview-cell">
                                 {{range .PreviewParts}}
                                     {{if eq .Kind "image"}}{{if .URL}}<img class="preview-thumb" src="{{.URL}}" alt="{{.Summary}}" title="{{.Summary}}">{{end}}{{end}}
                                 {{end}}
-                                <span>{{truncate .Preview 80}}</span>
-                            </div>
+                                {{if .Preview}}<span>{{truncate .Preview 140}}</span>{{else}}<span class="preview-empty">No message preview</span>{{end}}
+                            </div></a>
                         </td>
                     </tr>
                     {{else}}
                     <tr>
-                        <td colspan="8" style="text-align: center; padding: 40px; color: #95a5a6;">
+                        <td colspan="4" style="text-align: center; padding: 40px; color: #95a5a6;">
                             No requests logged yet
                         </td>
                     </tr>

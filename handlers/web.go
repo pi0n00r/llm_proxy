@@ -60,6 +60,7 @@ func init() {
 	funcMap := template.FuncMap{
 		"truncate":    truncateString,
 		"formatBytes": formatBytes,
+		"statusOK":    statusOK,
 	}
 
 	var err error
@@ -67,6 +68,10 @@ func init() {
 	if err != nil {
 		log.Fatalf("Failed to parse templates: %v", err)
 	}
+}
+
+func statusOK(status int) bool {
+	return status >= 200 && status < 300
 }
 
 // WebHandler handles the web UI for viewing logs
@@ -141,6 +146,9 @@ func (h *WebHandler) IndexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
+	if totalPages == 0 {
+		totalPages = 1
+	}
 
 	// Prepare template data
 	viewEntries := make([]logListEntry, 0, len(entries))

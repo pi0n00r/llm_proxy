@@ -72,6 +72,19 @@ func TestHomeHandlerDisplaysConfigSettings(t *testing.T) {
 	}
 }
 
+func TestStatusOK(t *testing.T) {
+	for _, status := range []int{200, 201, 204, 299} {
+		if !statusOK(status) {
+			t.Errorf("statusOK(%d) = false", status)
+		}
+	}
+	for _, status := range []int{0, 199, 300, 400, 500} {
+		if statusOK(status) {
+			t.Errorf("statusOK(%d) = true", status)
+		}
+	}
+}
+
 func TestRenderedMessagesIncludeReadableToolCalls(t *testing.T) {
 	raw := `{"messages":[{"role":"assistant","content":"","tool_calls":[{"id":"call-1","function":{"name":"turn_on","arguments":"{\"room\":\"office\"}"}}]},{"role":"tool","tool_call_id":"call-1","content":"done"}]}`
 	messages := renderedMessagesFromRaw(raw)

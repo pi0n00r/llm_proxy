@@ -367,7 +367,7 @@
                 </div>
                 <div class="info-item">
                     <div class="info-label">Status Code</div>
-                    <div class="info-value {{if eq .StatusCode 200}}status-ok{{else}}status-error{{end}}">{{.StatusCode}}</div>
+                    <div class="info-value {{if statusOK .StatusCode}}status-ok{{else}}status-error{{end}}">{{.StatusCode}}</div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">Latency</div>
