@@ -193,6 +193,9 @@ mode = "passthrough"
 
 [ollama_overrides]
 thinking = "passthrough"
+
+[gemma_4_fix]
+enabled = false
 ```
 
 ### Configuration Options
@@ -490,6 +493,7 @@ The proxy implements the following Ollama API endpoints:
 - `POST /api/show` - Show model information
 
 Model listing and show responses preserve upstream metadata where available, including context length fields used by OpenAI- and Ollama-compatible clients.
+If an OpenAI-compatible backend does not provide a usable `/v1/models` response, model listing falls back to a single model named `default` so clients that require discovery can still connect.
 
 ### OpenAI-Compatible Endpoints
 
@@ -503,6 +507,7 @@ The proxy implements the following basic OpenAI API endpoints:
 - `GET /` - Home page with configuration overview
 - `GET /logs` - Paginated list of all requests/responses
 - `GET /logs/details?id=<id>` - Detailed view of a specific request
+- `GET /logs/download?id=<id>` - Download one complete log entry as Markdown for debugging
 - `GET /api/logs` - JSON list of logged requests; supports filters such as `limit`, `offset`, `model`, `endpoint`, `backend_type`, `status`, `errors_only`, `since`, `until`, `q`, `order`, and `bodies`
 - `GET /api/logs/{id}` - JSON detail for one logged request, always including frontend/backend request and response bodies
 - `GET /api/logs?id=<id>` - Query-parameter form of the same JSON detail endpoint
@@ -575,12 +580,16 @@ llm_proxy/
 ├── backend/
 │   ├── backend.go          # Backend interface
 │   ├── openai.go           # OpenAI backend implementation
+│   ├── gemma4_fix.go       # Optional Gemma 4/vLLM stream mitigation
 │   └── ollama.go           # Ollama backend implementation
 ├── handlers/
 │   ├── generate.go         # /api/generate handler
 │   ├── chat.go             # /api/chat handler
 │   ├── models.go           # /api/tags and /api/show handlers
 │   ├── openai_frontend.go  # /v1/chat/completions and /v1/models handlers
+│   ├── chat_features.go    # Shared chat injection and tool filtering
+│   ├── request_sanitization.go # Maximum-token request policies
+│   ├── stream_override.go  # Backend streaming override
 │   ├── logs_api.go         # /api/logs JSON handlers
 │   ├── web.go              # Web UI handlers
 │   ├── static/             # Embedded static assets
@@ -600,13 +609,15 @@ llm_proxy/
 ├── client.sh               # Run the chat client from source
 ├── Dockerfile              # Docker build configuration
 ├── docker-compose.yml      # Docker compose setup
+├── docker-compose.override.yml.example # Local ports and volumes
 ├── config.toml.example     # Example configuration
+├── docs/                   # Logs API and Gemma 4 mitigation notes
 └── README.md               # This file
 ```
 
 ## Performance
 
-The proxy adds minimal latency as it streams responses directly from the backend without buffering full responses in memory. Request and response summaries are stored in SQLite after each request completes.
+Streaming responses are normally forwarded with minimal latency. The proxy retains response data for SQLite logging, aggregates chunks when a non-streaming client response is required, and may briefly hold suspicious content when the optional Gemma 4 mitigation is enabled.
 
 ## Docker Deployment
 

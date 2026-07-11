@@ -4,8 +4,7 @@ services:
   llm-proxy:
     ports:
       - 11435:11434
-      # To avoid conflicts with local ollama instance use this instead:
-      # - 11435:11434
+      # Change the host-side port (11435) if it conflicts with another service.
     volumes:
       # Mount config file
       - ./config.toml:/app/config/config.toml:ro

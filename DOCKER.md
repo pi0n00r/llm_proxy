@@ -83,17 +83,13 @@ If you prefer to build the Docker image from source (for development or customiz
 
 ### 1. Prepare Configuration
 
-First, create your `config.toml` from the **Docker-specific** example:
+First, create your `config.toml` from the example:
 
 ```bash
 cp config.toml.example config.toml
 ```
 
-This example includes the correct paths for Docker containers:
-- `database.path` is set to `/app/data/llm_proxy.db` (inside the container)
-- `backend.endpoint` uses `host.docker.internal` to access services on the host
-
-Edit `config.toml` to match your backend settings if needed.
+The default `database.path = "./data/llm_proxy.db"` resolves to `/app/data/llm_proxy.db` because the image runs from `/app`. Edit `backend.endpoint` for wherever your backend is reachable; a backend running on the Docker host will generally need `host.docker.internal` instead of `localhost`.
 
 ### 2. Create Docker Compose Override
 
@@ -196,7 +192,7 @@ The `docker-compose.override.yml` sets up two volume mounts:
 2. **Database directory** (`./data` → `/app/data`)
    - Stores the SQLite database (`llm_proxy.db`)
    - Persists request/response logs across container restarts
-   - The `config.toml.example` already has the correct path: `"/app/data/llm_proxy.db"`
+   - The example's relative path, `"./data/llm_proxy.db"`, resolves to this mounted directory inside the container
 
 ### Environment Variables
 
@@ -255,7 +251,7 @@ docker-compose up -d
 If the backend is running on your host machine:
 - Use `host.docker.internal` instead of `localhost` in your `backend.endpoint`
 - Example: `endpoint = "http://host.docker.internal:8008"`
-- The `config.toml.example` already uses this format
+- The example uses `localhost`, so change it when the backend runs on the Docker host
 
 On Linux, you may need to add this to your `docker-compose.override.yml`:
 

@@ -41,11 +41,14 @@ GOCACHE=/tmp/llm_proxy_go_build CGO_ENABLED=0 go test ./...
 - `config/` loads and validates `config.toml`.
 - `backend/` contains the backend interface and the OpenAI/Ollama backend implementations.
 - `handlers/` contains the Ollama frontend handlers, OpenAI frontend handlers, web UI handlers, templates, and static assets.
+- `handlers/chat_features.go`, `request_sanitization.go`, and `stream_override.go` contain shared request-mutation behavior used across frontend endpoints.
+- `backend/gemma4_fix.go` contains the optional, self-contained Gemma 4/vLLM streaming-corruption mitigation.
 - `models/` contains shared request and response structs.
 - `database/` owns SQLite initialization and log queries.
 - `middleware/` contains CORS and verbose request logging middleware.
 - `cmd/chatclient/` contains the stdlib-only terminal chat client.
 - `run.sh` and `client.sh` are convenience wrappers for local manual testing.
+- `docs/` contains the JSON logs API reference and design notes for the Gemma 4 mitigation.
 
 ## Streaming Architecture
 
@@ -74,8 +77,12 @@ Follow the existing pattern (see `RequestSanitizationConfig`, `StreamOverrideCon
 - Preserve the two frontend API surfaces:
   - Ollama-compatible: `/api/generate`, `/api/chat`, `/api/tags`, `/api/show`
   - OpenAI-compatible: `/v1/chat/completions`, `/v1/models`
+- Preserve the web/API utility routes: `/`, `/logs`, `/logs/details`, `/logs/download`, `/api/logs`, `/api/logs/{id}`, and `/health`.
 - OpenAI backend support lives in `backend/openai.go`; OpenAI-compatible frontend support lives in `handlers/openai_frontend.go`.
 - Text injection and tool blacklist behavior apply to both chat frontend endpoints: `/api/chat` and `/v1/chat/completions`.
+- Request sanitization and stream override behavior must remain consistent across `/api/generate`, `/api/chat`, and `/v1/chat/completions`.
+- `ollama_overrides.thinking` affects chat requests only and is materialized only by the Ollama backend.
+- `gemma_4_fix.enabled` affects OpenAI-backend chat processing only; keep the mitigation isolated and update both design documents in `docs/` if its behavior changes.
 - Config parsing intentionally rejects unknown TOML keys.
 - `config.toml` and `data/` are local runtime files and are ignored by git. Keep changes in `config.toml.example` when documenting default config shape.
 
@@ -89,6 +96,9 @@ Follow the existing pattern (see `RequestSanitizationConfig`, `StreamOverrideCon
   - `handlers/openai_frontend_test.go` for OpenAI-compatible frontend behavior.
   - `handlers/llmlog_test.go` for log formatting.
   - `handlers/request_sanitization_test.go` and `handlers/stream_override_test.go` for the spy-backend, cross-endpoint parity test pattern used for request-mutation features.
+  - `handlers/chat_features_test.go` and `handlers/ollama_thinking_override_test.go` for shared chat mutations and Ollama thinking behavior.
+  - `backend/gemma4_fix_test.go` for the optional Gemma 4 stream mitigation.
+  - `handlers/logs_api_test.go` and `handlers/web_test.go` for JSON and HTML log routes.
 
 ## Commit Guidance
 
@@ -96,6 +106,6 @@ Follow the existing pattern (see `RequestSanitizationConfig`, `StreamOverrideCon
 
 ## Documentation Guidance
 
-- Keep `README.md` aligned with `config.toml.example`, `go.mod`, `Dockerfile`, scripts, and exposed routes.
+- Keep `README.md`, `DOCKER.md`, and `AGENTS.md` aligned with `config.toml.example`, `go.mod`, Docker files, scripts, and exposed routes.
 - If endpoints are added or changed, update both the API endpoint list and the project structure section in `README.md`.
 - If release targets change, update the README release section and check `.goreleaser.yml` / `.github/workflows/release.yml`.
