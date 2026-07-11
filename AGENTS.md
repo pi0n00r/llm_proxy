@@ -90,6 +90,10 @@ Follow the existing pattern (see `RequestSanitizationConfig`, `StreamOverrideCon
   - `handlers/llmlog_test.go` for log formatting.
   - `handlers/request_sanitization_test.go` and `handlers/stream_override_test.go` for the spy-backend, cross-endpoint parity test pattern used for request-mutation features.
 
+## Commit Guidance
+
+- When an AI agent creates a commit, add a `Co-authored-by` trailer naming the model currently running. Do not use a fixed model name inherited from an earlier session. Use the form `Co-authored-by: <current model name> <noreply@openai.com>` (for example, `Co-authored-by: GPT-5 <noreply@openai.com>`).
+
 ## Documentation Guidance
 
 - Keep `README.md` aligned with `config.toml.example`, `go.mod`, `Dockerfile`, scripts, and exposed routes.
