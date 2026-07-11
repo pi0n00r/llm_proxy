@@ -16,7 +16,7 @@ type GenerateRequest struct {
 	Stream    bool                   `json:"stream,omitempty"`
 	Options   map[string]interface{} `json:"options,omitempty"`
 	Context   []int                  `json:"context,omitempty"`
-	Format    string                 `json:"format,omitempty"`
+	Format    json.RawMessage        `json:"format,omitempty"`
 	System    string                 `json:"system,omitempty"`
 	Template  string                 `json:"template,omitempty"`
 	Raw       bool                   `json:"raw,omitempty"`
@@ -45,7 +45,7 @@ type ChatRequest struct {
 	Messages  []Message                  `json:"messages"`
 	Stream    bool                       `json:"stream,omitempty"`
 	Options   map[string]interface{}     `json:"options,omitempty"`
-	Format    string                     `json:"format,omitempty"`
+	Format    json.RawMessage            `json:"format,omitempty"`
 	Template  string                     `json:"template,omitempty"`
 	Tools     []interface{}              `json:"tools,omitempty"`
 	KeepAlive string                     `json:"keep_alive,omitempty"`
