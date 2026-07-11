@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 	"time"
@@ -57,6 +58,77 @@ func TestLogRoundTrip(t *testing.T) {
 	}
 	if !got.Stream {
 		t.Fatal("Stream = false, want true")
+	}
+}
+
+func TestDatabaseUsesWALAndBusyTimeout(t *testing.T) {
+	db, err := New(filepath.Join(t.TempDir(), "llm_proxy.db"))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer db.Close()
+
+	var journalMode string
+	if err := db.conn.QueryRow("PRAGMA journal_mode").Scan(&journalMode); err != nil {
+		t.Fatalf("query journal mode: %v", err)
+	}
+	if journalMode != "wal" {
+		t.Fatalf("journal mode = %q, want wal", journalMode)
+	}
+
+	var busyTimeout int
+	if err := db.conn.QueryRow("PRAGMA busy_timeout").Scan(&busyTimeout); err != nil {
+		t.Fatalf("query busy timeout: %v", err)
+	}
+	if busyTimeout != 5000 {
+		t.Fatalf("busy timeout = %d, want 5000", busyTimeout)
+	}
+}
+
+func TestLogWaitsForConcurrentWriter(t *testing.T) {
+	db, err := New(filepath.Join(t.TempDir(), "llm_proxy.db"))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer db.Close()
+
+	locker, err := db.conn.Conn(context.Background())
+	if err != nil {
+		t.Fatalf("acquire locking connection: %v", err)
+	}
+	defer locker.Close()
+	if _, err := locker.ExecContext(context.Background(), "BEGIN IMMEDIATE"); err != nil {
+		t.Fatalf("begin write transaction: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- db.Log(LogEntry{
+			Timestamp:   time.Now(),
+			Endpoint:    "/v1/chat/completions",
+			Method:      "POST",
+			StatusCode:  400,
+			BackendType: "ollama",
+			LastMessage: "locked request",
+		})
+	}()
+
+	select {
+	case err := <-done:
+		t.Fatalf("Log returned while lock was held: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	if _, err := locker.ExecContext(context.Background(), "COMMIT"); err != nil {
+		t.Fatalf("commit locking transaction: %v", err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Log() after lock release = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Log did not complete after lock release")
 	}
 }
 

@@ -3,6 +3,8 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -38,18 +40,54 @@ type LogEntry struct {
 
 // New creates a new database connection and initializes the schema
 func New(path string) (*DB, error) {
-	conn, err := sql.Open("sqlite", path)
+	conn, err := sql.Open("sqlite", sqliteDSN(path))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
 	db := &DB{conn: conn}
+	if err := db.configureConnection(); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("failed to configure database: %w", err)
+	}
 	if err := db.initSchema(); err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 
 	return db, nil
+}
+
+// sqliteDSN applies connection-local pragmas to every connection opened by
+// database/sql. SQLite's busy timeout is connection-local, so setting it once
+// with Exec is not sufficient when the pool grows under concurrent traffic.
+func sqliteDSN(path string) string {
+	if path == ":memory:" {
+		return "file::memory:?cache=shared&_pragma=busy_timeout%285000%29"
+	}
+
+	var dsn string
+	if strings.HasPrefix(path, "file:") {
+		dsn = path
+	} else {
+		dsn = (&url.URL{Scheme: "file", Path: path}).String()
+	}
+	separator := "?"
+	if strings.Contains(dsn, "?") {
+		separator = "&"
+	}
+	return dsn + separator + "_pragma=busy_timeout%285000%29"
+}
+
+func (db *DB) configureConnection() error {
+	var mode string
+	if err := db.conn.QueryRow("PRAGMA journal_mode = WAL").Scan(&mode); err != nil {
+		return err
+	}
+	if !strings.EqualFold(mode, "wal") {
+		return fmt.Errorf("WAL journal mode unavailable (database returned %q)", mode)
+	}
+	return nil
 }
 
 // initSchema creates the required tables if they don't exist
