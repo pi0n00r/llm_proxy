@@ -279,6 +279,7 @@ func (h *WebHandler) DetailsHandler(w http.ResponseWriter, r *http.Request) {
 		FrontendConversation: renderedMessagesFromRaw(entry.FrontendRequest),
 		BackendConversation:  renderedMessagesFromRaw(entry.BackendRequest),
 	}
+	markConversationChanges(data.FrontendConversation, data.BackendConversation)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := templates.ExecuteTemplate(w, "details.html", data); err != nil {
@@ -286,4 +287,16 @@ func (h *WebHandler) DetailsHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Template error", http.StatusInternalServerError)
 		return
 	}
+}
+
+func markConversationChanges(frontend, backend []renderedLogMessage) {
+	for i := range backend {
+		if i >= len(frontend) || conversationMessageKey(frontend[i]) != conversationMessageKey(backend[i]) {
+			backend[i].Changed = true
+		}
+	}
+}
+
+func conversationMessageKey(message renderedLogMessage) string {
+	return fmt.Sprintf("%s\x00%s\x00%v\x00%s", message.Role, message.Summary, message.ToolCalls, message.ToolCallID)
 }

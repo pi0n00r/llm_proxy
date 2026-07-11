@@ -23,9 +23,18 @@ type logListEntry struct {
 }
 
 type renderedLogMessage struct {
-	Role    string
-	Parts   []renderedLogPart
-	Summary string
+	Role       string
+	Parts      []renderedLogPart
+	ToolCalls  []renderedToolCall
+	ToolCallID string
+	Summary    string
+	Changed    bool
+}
+
+type renderedToolCall struct {
+	Name      string
+	Arguments string
+	ID        string
 }
 
 type renderedLogPart struct {
@@ -65,13 +74,71 @@ func renderedMessagesFromRaw(rawJSON string) []renderedLogMessage {
 	out := make([]renderedLogMessage, 0, len(msgs))
 	for _, msg := range msgs {
 		parts := renderedPartsFromContent(msg.Content)
+		if msg.Role == "tool" {
+			parts = renderedToolResultParts(parts)
+		}
 		out = append(out, renderedLogMessage{
-			Role:    msg.Role,
-			Parts:   parts,
-			Summary: summarizeRenderedParts(parts),
+			Role:       msg.Role,
+			Parts:      parts,
+			ToolCalls:  renderedToolCalls(msg.ToolCalls),
+			ToolCallID: msg.ToolCallID,
+			Summary:    summarizeRenderedParts(parts),
 		})
 	}
 	return out
+}
+
+func renderedToolResultParts(parts []renderedLogPart) []renderedLogPart {
+	for i := range parts {
+		if parts[i].Kind != "text" {
+			continue
+		}
+		trimmed := strings.TrimSpace(parts[i].Text)
+		if len(trimmed) < 2 || !((trimmed[0] == '{' && trimmed[len(trimmed)-1] == '}') || (trimmed[0] == '[' && trimmed[len(trimmed)-1] == ']')) {
+			continue
+		}
+		var value interface{}
+		if json.Unmarshal([]byte(trimmed), &value) != nil {
+			continue
+		}
+		formatted, err := json.MarshalIndent(value, "", "  ")
+		if err == nil {
+			parts[i].Kind = "json"
+			parts[i].Text = string(formatted)
+		}
+	}
+	return parts
+}
+
+func renderedToolCalls(calls []map[string]interface{}) []renderedToolCall {
+	out := make([]renderedToolCall, 0, len(calls))
+	for _, call := range calls {
+		fn, _ := call["function"].(map[string]interface{})
+		name, _ := fn["name"].(string)
+		id, _ := call["id"].(string)
+		arguments := formatToolArguments(fn["arguments"])
+		out = append(out, renderedToolCall{Name: name, Arguments: arguments, ID: id})
+	}
+	return out
+}
+
+func formatToolArguments(arguments interface{}) string {
+	if arguments == nil {
+		return "{}"
+	}
+	if raw, ok := arguments.(string); ok {
+		var value interface{}
+		if json.Unmarshal([]byte(raw), &value) == nil {
+			if formatted, err := json.MarshalIndent(value, "", "  "); err == nil {
+				return string(formatted)
+			}
+		}
+		return raw
+	}
+	if formatted, err := json.MarshalIndent(arguments, "", "  "); err == nil {
+		return string(formatted)
+	}
+	return fmt.Sprint(arguments)
 }
 
 func renderedPartsFromContent(content interface{}) []renderedLogPart {

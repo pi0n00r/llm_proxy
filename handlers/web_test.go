@@ -4,6 +4,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"llm_proxy/database"
 )
 
 func TestHomeHandlerDisplaysConfigSettings(t *testing.T) {
@@ -66,6 +68,68 @@ func TestHomeHandlerDisplaysConfigSettings(t *testing.T) {
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("home page missing %q\nbody:\n%s", want, body)
+		}
+	}
+}
+
+func TestRenderedMessagesIncludeReadableToolCalls(t *testing.T) {
+	raw := `{"messages":[{"role":"assistant","content":"","tool_calls":[{"id":"call-1","function":{"name":"turn_on","arguments":"{\"room\":\"office\"}"}}]},{"role":"tool","tool_call_id":"call-1","content":"done"}]}`
+	messages := renderedMessagesFromRaw(raw)
+	if len(messages) != 2 || len(messages[0].ToolCalls) != 1 {
+		t.Fatalf("rendered messages = %#v", messages)
+	}
+	call := messages[0].ToolCalls[0]
+	if call.Name != "turn_on" || call.ID != "call-1" || !strings.Contains(call.Arguments, "\n  \"room\"") {
+		t.Fatalf("rendered tool call = %#v", call)
+	}
+	if messages[1].ToolCallID != "call-1" {
+		t.Fatalf("tool result ID = %q", messages[1].ToolCallID)
+	}
+}
+
+func TestRenderedToolResultPrettyPrintsJSON(t *testing.T) {
+	raw := `{"messages":[{"role":"tool","content":"{\"ok\":true,\"items\":[1,2]}"},{"role":"tool","content":"{not json}"}]}`
+	messages := renderedMessagesFromRaw(raw)
+	if len(messages) != 2 {
+		t.Fatalf("rendered messages = %#v", messages)
+	}
+	if got := messages[0].Parts[0]; got.Kind != "json" || !strings.Contains(got.Text, "\n  \"ok\": true") {
+		t.Fatalf("formatted JSON result = %#v", got)
+	}
+	if got := messages[1].Parts[0]; got.Kind != "text" || got.Text != "{not json}" {
+		t.Fatalf("invalid JSON result = %#v", got)
+	}
+}
+
+func TestConversationChangesAreMarked(t *testing.T) {
+	frontend := []renderedLogMessage{{Role: "system", Summary: "original"}, {Role: "user", Summary: "hello"}}
+	backend := []renderedLogMessage{{Role: "system", Summary: "injected"}, {Role: "user", Summary: "hello"}, {Role: "system", Summary: "added"}}
+	markConversationChanges(frontend, backend)
+	if !backend[0].Changed || backend[1].Changed || !backend[2].Changed {
+		t.Fatalf("unexpected changed flags: %#v", backend)
+	}
+}
+
+func TestDetailsTemplateHasConversationTabsAndAPIHandoff(t *testing.T) {
+	data := struct {
+		*database.LogEntry
+		NextID               *int64
+		PrevID               *int64
+		PromptDisplay        string
+		FrontendConversation []renderedLogMessage
+		BackendConversation  []renderedLogMessage
+	}{
+		LogEntry:             &database.LogEntry{ID: 42, StatusCode: 200, Response: "final answer"},
+		FrontendConversation: []renderedLogMessage{{Role: "user", Parts: []renderedLogPart{{Kind: "text", Text: "hello"}}}},
+		BackendConversation:  []renderedLogMessage{{Role: "assistant", ToolCalls: []renderedToolCall{{Name: "search", Arguments: "{}"}}, Changed: true}},
+	}
+	var out strings.Builder
+	if err := templates.ExecuteTemplate(&out, "details.html", data); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Client → Proxy", "Proxy → Backend", "CHANGED BY PROXY", "Tool call", "search", "MODEL RESPONSE", "final answer", "/api/logs/42", "Copy for agent"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("details page missing %q", want)
 		}
 	}
 }

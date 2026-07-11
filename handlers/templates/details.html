@@ -105,6 +105,15 @@
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
+        .section-heading {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .section-heading h2 { flex: 1; margin-bottom: 0; }
+        .section-note { color: #667680; font-size: 14px; margin-top: -8px; margin-bottom: 18px; }
         h2 {
             color: #34495e;
             margin-bottom: 15px;
@@ -199,19 +208,32 @@
             margin-bottom: 5px;
         }
         .conversation-message {
-            padding: 12px;
-            margin-bottom: 12px;
+            position: relative;
+            padding: 16px 18px;
+            margin-bottom: 14px;
             background: #f8f9fa;
-            border-radius: 6px;
-            border-left: 4px solid #bdc3c7;
+            border: 1px solid #e3e8eb;
+            border-left: 5px solid #95a5a6;
+            border-radius: 8px;
         }
+        .conversation-message.role-user { background: #eef7ff; border-left-color: #2980b9; }
+        .conversation-message.role-assistant { background: #f2fbf5; border-left-color: #27ae60; }
+        .conversation-message.role-system { background: #fff8e6; border-left-color: #e2a214; }
+        .conversation-message.role-tool { background: #f7f1fc; border-left-color: #8e44ad; }
+        .conversation-message.changed { box-shadow: inset 0 0 0 1px #e2a214; }
         .conversation-role {
-            font-weight: 700;
-            color: #34495e;
-            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 800;
+            color: #263746;
+            margin-bottom: 10px;
             text-transform: uppercase;
             font-size: 12px;
+            letter-spacing: .07em;
         }
+        .role-icon { font-size: 16px; }
+        .change-badge { margin-left: auto; color: #875d00; background: #fff0bd; padding: 2px 7px; border-radius: 10px; font-size: 10px; letter-spacing: 0; }
         .conversation-text {
             white-space: pre-wrap;
             margin-bottom: 8px;
@@ -231,6 +253,25 @@
             font-size: 12px;
             margin-bottom: 6px;
         }
+        .tabs { display: flex; gap: 4px; border-bottom: 1px solid #dce3e7; margin-bottom: 18px; }
+        .tab-button { border: 0; border-bottom: 3px solid transparent; background: transparent; padding: 10px 14px; color: #60717d; cursor: pointer; font: inherit; font-weight: 650; }
+        .tab-button.active { color: #2375a8; border-bottom-color: #3498db; }
+        .tab-panel.hidden { display: none; }
+        .tool-call { margin-top: 12px; border: 1px solid #d8c8e3; border-radius: 7px; overflow: hidden; background: #fff; }
+        .tool-call-header { display: flex; gap: 8px; align-items: center; padding: 9px 12px; background: #eee2f5; color: #63337b; font-weight: 700; }
+        .tool-call-id { margin-left: auto; font: 11px "Courier New", monospace; color: #80688c; overflow-wrap: anywhere; }
+        .tool-arguments { margin: 0; padding: 12px; overflow-x: auto; white-space: pre-wrap; font: 12px/1.5 "Courier New", monospace; color: #33283a; }
+        .api-handoff { background: #edf7f1; border: 1px solid #c9e4d3; border-left: 5px solid #27ae60; }
+        .handoff-command { display: flex; gap: 10px; align-items: stretch; }
+        .handoff-command code { flex: 1; padding: 11px 13px; border-radius: 5px; background: #24333d; color: #ecf0f1; white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.5 "Courier New", monospace; }
+        .copy-btn { border: 0; border-radius: 5px; padding: 9px 14px; color: white; background: #27ae60; cursor: pointer; font-weight: 700; }
+        .copy-btn:hover { background: #219a52; }
+        .raw-heading { margin-top: 34px; margin-bottom: 12px; color: #60717d; font-size: 14px; text-transform: uppercase; letter-spacing: .08em; }
+        @media (max-width: 650px) {
+            .container { padding: 10px; }
+            .section, header { padding: 15px; }
+            .handoff-command { flex-direction: column; }
+        }
     </style>
     <script>
         function toggleCollapse(id) {
@@ -238,6 +279,22 @@
             const content = document.getElementById('content-' + id);
             header.classList.toggle('collapsed');
             content.classList.toggle('hidden');
+        }
+
+        function showConversation(name, button) {
+            document.querySelectorAll('.tab-panel').forEach(function(panel) { panel.classList.add('hidden'); });
+            document.querySelectorAll('.tab-button').forEach(function(tab) { tab.classList.remove('active'); });
+            document.getElementById('conversation-' + name).classList.remove('hidden');
+            button.classList.add('active');
+        }
+
+        function copyAPIHandoff(button) {
+            const text = 'Inspect LLM proxy request #{{.ID}} using the JSON API: GET ' + window.location.origin + '/api/logs/{{.ID}}';
+            navigator.clipboard.writeText(text).then(function() {
+                const old = button.textContent;
+                button.textContent = 'Copied!';
+                setTimeout(function() { button.textContent = old; }, 1400);
+            });
         }
         
         function formatJSON(jsonStr) {
@@ -250,6 +307,8 @@
         }
         
         window.addEventListener('DOMContentLoaded', function() {
+            const apiURL = document.getElementById('api-url');
+            if (apiURL) apiURL.textContent = window.location.origin + '/api/logs/{{.ID}}';
             // Format all JSON code blocks
             document.querySelectorAll('.json-content').forEach(function(el) {
                 el.textContent = formatJSON(el.textContent);
@@ -331,81 +390,75 @@
             {{end}}
         </div>
 
+        <div class="section api-handoff">
+            <div class="section-heading"><h2>Hand this request to an agent</h2></div>
+            <p class="section-note">Copies a short instruction containing the full JSON API URL for this log entry.</p>
+            <div class="handoff-command">
+                <code>Inspect LLM proxy request #{{.ID}} using the JSON API: GET <span id="api-url">/api/logs/{{.ID}}</span></code>
+                <button class="copy-btn" type="button" onclick="copyAPIHandoff(this)">Copy for agent</button>
+            </div>
+        </div>
+
+        {{if or .FrontendConversation .BackendConversation .PromptDisplay .Response}}
         <div class="section">
-            <h2>URLs</h2>
+            <div class="section-heading"><h2>Conversation</h2></div>
+            <p class="section-note">Client view is shown first. Switch to backend view to inspect transformations and injected content; changed messages are highlighted.</p>
+            <div class="tabs" role="tablist">
+                {{if or .FrontendConversation .PromptDisplay .Response}}<button class="tab-button active" type="button" onclick="showConversation('frontend', this)">Client → Proxy</button>{{end}}
+                {{if .BackendConversation}}<button class="tab-button {{if not (or .FrontendConversation .PromptDisplay .Response)}}active{{end}}" type="button" onclick="showConversation('backend', this)">Proxy → Backend</button>{{end}}
+            </div>
+
+            {{if or .FrontendConversation .PromptDisplay .Response}}
+            <div class="tab-panel" id="conversation-frontend">
+                {{if and (not .FrontendConversation) .PromptDisplay}}
+                <article class="conversation-message role-user">
+                    <div class="conversation-role"><span class="role-icon">●</span>user</div>
+                    <div class="conversation-text">{{.PromptDisplay}}</div>
+                </article>
+                {{end}}
+                {{range .FrontendConversation}}
+                <article class="conversation-message role-{{.Role}}">
+                    <div class="conversation-role"><span class="role-icon">{{if eq .Role "user"}}●{{else if eq .Role "assistant"}}◆{{else if eq .Role "system"}}⚙{{else if eq .Role "tool"}}⌁{{else}}•{{end}}</span>{{.Role}}</div>
+                    {{range .Parts}}{{if eq .Kind "text"}}<div class="conversation-text">{{.Text}}</div>{{else if eq .Kind "json"}}<pre class="tool-arguments">{{.Text}}</pre>{{else if eq .Kind "image"}}<div class="image-meta">{{.Summary}}</div>{{if .URL}}<img class="conversation-image" src="{{.URL}}" alt="{{.Summary}}">{{end}}{{else}}<div class="content-placeholder">{{.Summary}}</div>{{end}}{{end}}
+                    {{range .ToolCalls}}<div class="tool-call"><div class="tool-call-header"><span>Tool call</span><span>{{if .Name}}{{.Name}}{{else}}unnamed function{{end}}</span>{{if .ID}}<span class="tool-call-id">{{.ID}}</span>{{end}}</div><pre class="tool-arguments">{{.Arguments}}</pre></div>{{end}}
+                    {{if .ToolCallID}}<div class="tool-call-id">Result for {{.ToolCallID}}</div>{{end}}
+                    {{if and (not .Parts) (not .ToolCalls)}}<div class="content-placeholder">_(empty message)_</div>{{end}}
+                </article>
+                {{end}}
+                {{if .Response}}
+                <article class="conversation-message role-assistant">
+                    <div class="conversation-role"><span class="role-icon">◆</span>assistant <span class="change-badge">MODEL RESPONSE</span></div>
+                    <div class="conversation-text">{{.Response}}</div>
+                </article>
+                {{end}}
+            </div>
+            {{end}}
+
+            {{if .BackendConversation}}
+            <div class="tab-panel {{if or .FrontendConversation .PromptDisplay .Response}}hidden{{end}}" id="conversation-backend">
+                {{range .BackendConversation}}
+                <article class="conversation-message role-{{.Role}} {{if .Changed}}changed{{end}}">
+                    <div class="conversation-role"><span class="role-icon">{{if eq .Role "user"}}●{{else if eq .Role "assistant"}}◆{{else if eq .Role "system"}}⚙{{else if eq .Role "tool"}}⌁{{else}}•{{end}}</span>{{.Role}}{{if .Changed}}<span class="change-badge">CHANGED BY PROXY</span>{{end}}</div>
+                    {{range .Parts}}{{if eq .Kind "text"}}<div class="conversation-text">{{.Text}}</div>{{else if eq .Kind "json"}}<pre class="tool-arguments">{{.Text}}</pre>{{else if eq .Kind "image"}}<div class="image-meta">{{.Summary}}</div>{{if .URL}}<img class="conversation-image" src="{{.URL}}" alt="{{.Summary}}">{{end}}{{else}}<div class="content-placeholder">{{.Summary}}</div>{{end}}{{end}}
+                    {{range .ToolCalls}}<div class="tool-call"><div class="tool-call-header"><span>Tool call</span><span>{{if .Name}}{{.Name}}{{else}}unnamed function{{end}}</span>{{if .ID}}<span class="tool-call-id">{{.ID}}</span>{{end}}</div><pre class="tool-arguments">{{.Arguments}}</pre></div>{{end}}
+                    {{if .ToolCallID}}<div class="tool-call-id">Result for {{.ToolCallID}}</div>{{end}}
+                    {{if and (not .Parts) (not .ToolCalls)}}<div class="content-placeholder">_(empty message)_</div>{{end}}
+                </article>
+                {{end}}
+            </div>
+            {{end}}
+        </div>
+        {{end}}
+
+        <div class="section">
+            <h2>Routing</h2>
             <div class="info-grid">
-                <div class="info-item">
-                    <div class="info-label">Frontend URL</div>
-                    <div class="info-value">{{.FrontendURL}}</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label">Backend URL</div>
-                    <div class="info-value">{{.BackendURL}}</div>
-                </div>
+                <div class="info-item"><div class="info-label">Frontend URL</div><div class="info-value">{{.FrontendURL}}</div></div>
+                <div class="info-item"><div class="info-label">Backend URL</div><div class="info-value">{{.BackendURL}}</div></div>
             </div>
         </div>
 
-        <div class="section">
-            <h2>Prompt & Response</h2>
-            <div class="info-item" style="margin-bottom: 15px;">
-                <div class="info-label">Prompt</div>
-                <div class="info-value preserve-newlines">{{.PromptDisplay}}</div>
-            </div>
-            <div class="info-item">
-                <div class="info-label">Response</div>
-                <div class="info-value preserve-newlines">{{.Response}}</div>
-            </div>
-        </div>
-
-        {{if .FrontendConversation}}
-        <div class="section">
-            <h2>Conversation (Frontend Request)</h2>
-            {{range .FrontendConversation}}
-            <div class="conversation-message">
-                <div class="conversation-role">{{.Role}}</div>
-                {{if .Parts}}
-                    {{range .Parts}}
-                        {{if eq .Kind "text"}}
-                            <div class="conversation-text">{{.Text}}</div>
-                        {{else if eq .Kind "image"}}
-                            <div class="image-meta">{{.Summary}}</div>
-                            {{if .URL}}<img class="conversation-image" src="{{.URL}}" alt="{{.Summary}}">{{end}}
-                        {{else}}
-                            <div class="content-placeholder">{{.Summary}}</div>
-                        {{end}}
-                    {{end}}
-                {{else}}
-                    <div class="content-placeholder">_(empty message)_</div>
-                {{end}}
-            </div>
-            {{end}}
-        </div>
-        {{end}}
-
-        {{if .BackendConversation}}
-        <div class="section">
-            <h2>Conversation (Backend Request)</h2>
-            {{range .BackendConversation}}
-            <div class="conversation-message">
-                <div class="conversation-role">{{.Role}}</div>
-                {{if .Parts}}
-                    {{range .Parts}}
-                        {{if eq .Kind "text"}}
-                            <div class="conversation-text">{{.Text}}</div>
-                        {{else if eq .Kind "image"}}
-                            <div class="image-meta">{{.Summary}}</div>
-                            {{if .URL}}<img class="conversation-image" src="{{.URL}}" alt="{{.Summary}}">{{end}}
-                        {{else}}
-                            <div class="content-placeholder">{{.Summary}}</div>
-                        {{end}}
-                    {{end}}
-                {{else}}
-                    <div class="content-placeholder">_(empty message)_</div>
-                {{end}}
-            </div>
-            {{end}}
-        </div>
-        {{end}}
+        <div class="raw-heading">Raw request and response payloads</div>
 
         {{if .FrontendRequest}}
         <div class="section">
