@@ -290,11 +290,32 @@
 
         function copyAPIHandoff(button) {
             const text = 'Inspect LLM proxy request #{{.ID}} using the JSON API: GET ' + window.location.origin + '/api/logs/{{.ID}}';
-            navigator.clipboard.writeText(text).then(function() {
-                const old = button.textContent;
-                button.textContent = 'Copied!';
+            const old = button.textContent;
+            const showResult = function(label) {
+                button.textContent = label;
                 setTimeout(function() { button.textContent = old; }, 1400);
-            });
+            };
+            const fallbackCopy = function() {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.setAttribute('readonly', '');
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.select();
+                let copied = false;
+                try { copied = document.execCommand('copy'); } catch (e) { copied = false; }
+                document.body.removeChild(textarea);
+                showResult(copied ? 'Copied!' : 'Copy failed');
+            };
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(function() {
+                    showResult('Copied!');
+                }).catch(fallbackCopy);
+            } else {
+                fallbackCopy();
+            }
         }
         
         function formatJSON(jsonStr) {

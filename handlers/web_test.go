@@ -140,7 +140,7 @@ func TestDetailsTemplateHasConversationTabsAndAPIHandoff(t *testing.T) {
 	if err := templates.ExecuteTemplate(&out, "details.html", data); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"Client → Proxy", "Proxy → Backend", "CHANGED BY PROXY", "Tool call", "search", "MODEL RESPONSE", "final answer", "/api/logs/42", "Copy for agent"} {
+	for _, want := range []string{"Client → Proxy", "Proxy → Backend", "CHANGED BY PROXY", "Tool call", "search", "MODEL RESPONSE", "final answer", "/api/logs/42", "Copy for agent", "document.execCommand('copy')", "Copy failed"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("details page missing %q", want)
 		}
