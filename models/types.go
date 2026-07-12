@@ -3,6 +3,7 @@ package models
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -21,6 +22,32 @@ type GenerateRequest struct {
 	Template  string                 `json:"template,omitempty"`
 	Raw       bool                   `json:"raw,omitempty"`
 	KeepAlive string                 `json:"keep_alive,omitempty"`
+}
+
+// UnmarshalJSON accepts both of Ollama's documented keep_alive forms: duration
+// strings and numbers representing seconds. Numeric values are normalized to a
+// duration string so the rest of the proxy can keep using the existing string
+// field without special cases.
+func (r *GenerateRequest) UnmarshalJSON(data []byte) error {
+	type requestAlias GenerateRequest
+	aux := struct {
+		KeepAlive json.RawMessage `json:"keep_alive"`
+		*requestAlias
+	}{requestAlias: (*requestAlias)(r)}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if len(aux.KeepAlive) == 0 {
+		return nil
+	}
+
+	keepAlive, err := decodeKeepAlive(aux.KeepAlive)
+	if err != nil {
+		return err
+	}
+	r.KeepAlive = keepAlive
+	return nil
 }
 
 // GenerateResponse represents an Ollama generate response
@@ -51,6 +78,57 @@ type ChatRequest struct {
 	KeepAlive string                     `json:"keep_alive,omitempty"`
 	Think     *bool                      `json:"think,omitempty"` // Ollama-native "thinking" toggle; nil = leave to backend default
 	OpenAIRaw map[string]json.RawMessage `json:"-"`
+}
+
+// UnmarshalJSON accepts both duration strings and numeric seconds for
+// keep_alive while preserving the existing string field for downstream code.
+func (r *ChatRequest) UnmarshalJSON(data []byte) error {
+	type requestAlias ChatRequest
+	aux := struct {
+		KeepAlive json.RawMessage `json:"keep_alive"`
+		*requestAlias
+	}{requestAlias: (*requestAlias)(r)}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if len(aux.KeepAlive) == 0 {
+		return nil
+	}
+
+	keepAlive, err := decodeKeepAlive(aux.KeepAlive)
+	if err != nil {
+		return err
+	}
+	r.KeepAlive = keepAlive
+	return nil
+}
+
+func decodeKeepAlive(data json.RawMessage) (string, error) {
+	if string(data) == "null" {
+		return "", nil
+	}
+
+	var duration string
+	if err := json.Unmarshal(data, &duration); err == nil {
+		return duration, nil
+	}
+
+	var number json.Number
+	if err := json.Unmarshal(data, &number); err != nil {
+		return "", fmt.Errorf("keep_alive must be a string or number")
+	}
+	seconds, err := strconv.ParseFloat(number.String(), 64)
+	if err != nil {
+		return "", fmt.Errorf("invalid numeric keep_alive: %w", err)
+	}
+	if seconds < 0 {
+		return "-1", nil
+	}
+	if seconds == 0 {
+		return "0", nil
+	}
+	return strconv.FormatFloat(seconds, 'f', -1, 64) + "s", nil
 }
 
 // Message represents a chat message
