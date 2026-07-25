@@ -3,6 +3,8 @@ package handlers
 import (
 	"fmt"
 	"math"
+	"strconv"
+	"time"
 
 	"llm_proxy/config"
 	"llm_proxy/models"
@@ -46,10 +48,18 @@ func validateServerManagedKeepAlive(value string, cfg *config.Config) error {
 	if expected == "" {
 		return fmt.Errorf("keep_alive is unsupported by the OpenAI backend; configure ollama_compatibility.server_managed_keep_alive to acknowledge server-managed model residence")
 	}
-	if value != expected {
+	if value != expected && !(isIndefiniteKeepAlive(value) && isIndefiniteKeepAlive(expected)) {
 		return fmt.Errorf("keep_alive=%q conflicts with server-managed value %q", value, expected)
 	}
 	return nil
+}
+
+func isIndefiniteKeepAlive(value string) bool {
+	if number, err := strconv.ParseFloat(value, 64); err == nil {
+		return !math.IsInf(number, 0) && !math.IsNaN(number) && number < 0
+	}
+	duration, err := time.ParseDuration(value)
+	return err == nil && duration < 0
 }
 
 func validateAndDropServerManagedNumCtx(options map[string]interface{}, cfg *config.Config) error {

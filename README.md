@@ -29,7 +29,7 @@ This fork stays close to [stevelittlefish/llm_proxy](https://github.com/stevelit
 - `format: "json"` becomes OpenAI JSON-object mode.
 - Ollama schema objects become OpenAI `json_schema` response formats with `strict: false` unless an explicit OpenAI-style envelope requests otherwise.
 - Request-scoped `think: false` becomes `reasoning_effort: "none"` on both `/api/chat` and `/api/generate`.
-- `keep_alive` and `options.num_ctx` are accepted only when they match explicitly configured server-managed values; unsupported or conflicting claims return HTTP 400.
+- Indefinite `keep_alive` assertions and exact `options.num_ctx` values are accepted only when they agree with explicitly configured server-managed values; unsupported or conflicting claims return HTTP 400.
 - OpenAI-backed `/api/generate` uses Chat Completions instead of the legacy Completions endpoint.
 - Streamed and non-streamed tool calls use the same Ollama argument-object shape and preserve tool-call IDs.
 - IPv6 listeners and displayed frontend URLs use bracket-safe host/port construction.
@@ -280,10 +280,10 @@ When `store_content = false`, the UI and logs API still expose endpoint, model, 
 - All request/response data is permanently deleted when cleaned up
 
 #### Ollama Compatibility
-- `server_managed_keep_alive`: The model-residence value already enforced by the OpenAI-compatible server, such as `"-1"`.
+- `server_managed_keep_alive`: The model-residence value already enforced by the OpenAI-compatible server, such as `"-1"`. When this is indefinite, numeric `-1`, string `"-1"`, and any negative number or duration string (for example, `"-1s"`) are treated as equivalent indefinite assertions.
 - `server_managed_num_ctx`: The context window already enforced by the OpenAI-compatible server, such as `131072`.
 
-These settings apply only when `backend.type = "openai"`. Matching client hints are acknowledged and removed before forwarding. Conflicting values return HTTP 400. If no corresponding server-managed value is configured, a client that sends the unsupported hint receives HTTP 400 instead of a false success.
+These settings apply only when `backend.type = "openai"`. Matching client hints are acknowledged and removed before forwarding. Ollama treats any negative keepalive number or duration as indefinite, so those forms are equivalent when the configured server-managed value is also indefinite. Finite or malformed keepalive claims and non-matching context values return HTTP 400. If no corresponding server-managed value is configured, a client that sends the unsupported hint receives HTTP 400 instead of a false success.
 
 #### Request Sanitization
 - `max_tokens_policy`: How to handle incoming maximum-token parameters (default: `"preserve"`)

@@ -45,9 +45,13 @@ server_managed_num_ctx = 131072
 ```
 
 A matching `keep_alive` or `options.num_ctx` is accepted and removed before
-forwarding. A conflicting value returns HTTP 400. If the corresponding
-server-managed value is not configured, sending that hint also returns HTTP
-400. The proxy never reports that it honored a value it cannot apply.
+forwarding. Ollama defines any negative keepalive number or duration as
+indefinite, so numeric `-1`, string `"-1"`, and negative duration strings such
+as `"-1s"` are equivalent when the configured server-managed keepalive is
+indefinite. Finite or malformed keepalive claims and non-matching context
+values return HTTP 400. If the corresponding server-managed value is not
+configured, sending that hint also returns HTTP 400. The proxy never reports
+that it honored a value it cannot apply.
 
 ## Generate Translation
 
