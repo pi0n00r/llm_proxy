@@ -10,7 +10,7 @@ The main motivation for creating this was to get the Home Assistant Ollama integ
 - **Basic OpenAI-Compatible API** - Provides `/v1/chat/completions` and `/v1/models` frontend endpoints for simple OpenAI-style clients
 - **Multiple Backend Support** - Connect to OpenAI-compatible APIs (e.g., llama.cpp) or Ollama instances
 - **Streaming Support** - Full support for streaming responses with minimal latency
-- **Request/Response Logging** - All interactions logged to SQLite with timestamps, latency, and error tracking
+- **Request/Response Logging** - Interaction metadata logged to SQLite with timestamps, latency, and error tracking
 - **Metadata-Only Logging** - Optional mode keeps inspection metadata without retaining prompts, responses, raw bodies, or tool results
 - **Web UI** - Built-in interface for viewing logs, request/response details, and configuration
 - **JSON Logs API** - Query logged frontend/backend requests and responses from `/api/logs`
