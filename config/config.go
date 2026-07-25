@@ -12,6 +12,7 @@ type Config struct {
 	Backend             BackendConfig             `toml:"backend"`
 	BackendOpenAI       BackendOpenAIConfig       `toml:"backend_openai"`
 	Database            DatabaseConfig            `toml:"database"`
+	OllamaCompatibility OllamaCompatibilityConfig `toml:"ollama_compatibility"`
 	RequestSanitization RequestSanitizationConfig `toml:"request_sanitization"`
 	ChatTextInjection   ChatTextInjectionConfig   `toml:"chat_text_injection"`
 	StreamOverride      StreamOverrideConfig      `toml:"stream_override"`
@@ -43,6 +44,15 @@ type DatabaseConfig struct {
 	Path            string `toml:"path"`
 	MaxRequests     int    `toml:"max_requests"`     // Maximum number of requests to keep (0 = unlimited)
 	CleanupInterval int    `toml:"cleanup_interval"` // Cleanup interval in minutes (0 = disabled)
+	StoreContent    bool   `toml:"store_content"`    // Store prompts and responses in SQLite
+}
+
+// OllamaCompatibilityConfig makes server-managed OpenAI backend behavior
+// explicit. When a value is configured, matching Ollama hints are accepted and
+// removed before translation; conflicting values are rejected.
+type OllamaCompatibilityConfig struct {
+	ServerManagedKeepAlive string `toml:"server_managed_keep_alive"`
+	ServerManagedNumCtx    int    `toml:"server_managed_num_ctx"`
 }
 
 // BackendOpenAIConfig holds OpenAI-specific backend settings
@@ -129,6 +139,9 @@ func Load(path string) (*Config, error) {
 		config.OllamaOverrides.Thinking != "on" {
 		return nil, fmt.Errorf("invalid ollama_overrides.thinking: %s (must be 'passthrough', 'off', or 'on')", config.OllamaOverrides.Thinking)
 	}
+	if config.OllamaCompatibility.ServerManagedNumCtx < 0 {
+		return nil, fmt.Errorf("invalid ollama_compatibility.server_managed_num_ctx: %d (must be 0 or greater)", config.OllamaCompatibility.ServerManagedNumCtx)
+	}
 
 	// Set defaults
 	if config.Server.Host == "" {
@@ -148,6 +161,9 @@ func Load(path string) (*Config, error) {
 	}
 	if config.Database.CleanupInterval == 0 {
 		config.Database.CleanupInterval = 5
+	}
+	if !metadata.IsDefined("database", "store_content") {
+		config.Database.StoreContent = true
 	}
 	if config.ChatTextInjection.Mode == "" {
 		config.ChatTextInjection.Mode = "last"

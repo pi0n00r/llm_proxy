@@ -13,7 +13,8 @@ import (
 
 // DB wraps the SQLite database connection
 type DB struct {
-	conn *sql.DB
+	conn         *sql.DB
+	storeContent bool
 }
 
 // LogEntry represents a logged request/response
@@ -41,12 +42,18 @@ type LogEntry struct {
 
 // New creates a new database connection and initializes the schema
 func New(path string) (*DB, error) {
+	return NewWithContentStorage(path, true)
+}
+
+// NewWithContentStorage creates a database and controls whether conversational
+// content is retained. Request metadata remains available in either mode.
+func NewWithContentStorage(path string, storeContent bool) (*DB, error) {
 	conn, err := sql.Open("sqlite", sqliteDSN(path))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	db := &DB{conn: conn}
+	db := &DB{conn: conn, storeContent: storeContent}
 	if err := db.configureConnection(); err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("failed to configure database: %w", err)
@@ -137,6 +144,17 @@ func (db *DB) initSchema() error {
 
 // Log inserts a log entry into the database
 func (db *DB) Log(entry LogEntry) error {
+	if !db.storeContent {
+		entry.Prompt = ""
+		entry.Response = ""
+		entry.Error = contentRedacted(entry.Error)
+		entry.FrontendRequest = ""
+		entry.FrontendResponse = ""
+		entry.BackendRequest = ""
+		entry.BackendResponse = ""
+		entry.LastMessage = ""
+	}
+
 	query := `
 		INSERT INTO request (timestamp, endpoint, method, model, prompt, response, status_code, latency_ms, stream, backend_type, error, frontend_url, backend_url, frontend_request, frontend_response, backend_request, backend_response, last_message)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -169,6 +187,13 @@ func (db *DB) Log(entry LogEntry) error {
 	}
 
 	return nil
+}
+
+func contentRedacted(value string) string {
+	if value == "" {
+		return ""
+	}
+	return "request failed; content storage disabled"
 }
 
 // Close closes the database connection

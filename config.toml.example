@@ -1,8 +1,8 @@
 [server]
-host = "0.0.0.0"
-port = 11434
+host = "::"
+port = 6666
 enable_cors = false
-log_messages = true
+log_messages = false
 log_raw_requests = false
 log_raw_responses = false
 verbose = false
@@ -20,6 +20,15 @@ force_prompt_cache = false
 path = "./data/llm_proxy.db"
 max_requests = 100
 cleanup_interval = 5
+# Retain request metadata without storing prompts, responses, or raw bodies.
+store_content = false
+
+[ollama_compatibility]
+# OpenAI-compatible backends cannot apply Ollama's per-request model residence
+# or context controls. Matching values are accepted as truthful assertions of
+# server-managed state; conflicting values are rejected with HTTP 400.
+server_managed_keep_alive = "-1"
+server_managed_num_ctx = 131072
 
 [request_sanitization]
 # max_tokens_policy can be "preserve", "drop", or "drop_above"

@@ -4,7 +4,7 @@
 
 `llm_proxy` is a Go proxy server that exposes Ollama-compatible endpoints and forwards requests to either an OpenAI-compatible backend or an Ollama backend. It also exposes basic OpenAI-compatible frontend endpoints for simple clients.
 
-The server logs requests and responses to SQLite and serves a small web UI for browsing logs. The repository also includes a dependency-free terminal chat client in `cmd/chatclient`.
+The server logs request metadata to SQLite and can optionally retain request/response content. It serves a small web UI for browsing logs. The repository also includes a dependency-free terminal chat client in `cmd/chatclient`.
 
 ## Important Commands
 
@@ -42,6 +42,7 @@ GOCACHE=/tmp/llm_proxy_go_build CGO_ENABLED=0 go test ./...
 - `backend/` contains the backend interface and the OpenAI/Ollama backend implementations.
 - `handlers/` contains the Ollama frontend handlers, OpenAI frontend handlers, web UI handlers, templates, and static assets.
 - `handlers/chat_features.go`, `request_sanitization.go`, and `stream_override.go` contain shared request-mutation behavior used across frontend endpoints.
+- `handlers/ollama_compatibility.go` validates server-managed Ollama hints before OpenAI translation.
 - `backend/gemma4_fix.go` contains the optional, self-contained Gemma 4/vLLM streaming-corruption mitigation.
 - `models/` contains shared request and response structs.
 - `database/` owns SQLite initialization and log queries.
@@ -82,6 +83,9 @@ Follow the existing pattern (see `RequestSanitizationConfig`, `StreamOverrideCon
 - Text injection and tool blacklist behavior apply to both chat frontend endpoints: `/api/chat` and `/v1/chat/completions`.
 - Request sanitization and stream override behavior must remain consistent across `/api/generate`, `/api/chat`, and `/v1/chat/completions`.
 - `ollama_overrides.thinking` affects chat requests only and is materialized only by the Ollama backend.
+- Client-supplied `think:false` maps to request-scoped `reasoning_effort:none` for OpenAI-backed chat and generate requests.
+- OpenAI-backed generate requests intentionally use Chat Completions.
+- `database.store_content = false` must clear every conversational content column, not merely the prompt preview.
 - `gemma_4_fix.enabled` affects OpenAI-backend chat processing only; keep the mitigation isolated and update both design documents in `docs/` if its behavior changes.
 - Config parsing intentionally rejects unknown TOML keys.
 - `config.toml` and `data/` are local runtime files and are ignored by git. Keep changes in `config.toml.example` when documenting default config shape.

@@ -1,6 +1,6 @@
 # LLM Proxy
 
-A lightweight, Go-based proxy server that provides an Ollama-compatible API while forwarding requests to various LLM backends (OpenAI-compatible APIs like llama.cpp, or actual Ollama instances). All requests and responses are logged to an SQLite database for debugging and analysis.
+A lightweight, Go-based proxy server that provides an Ollama-compatible API while forwarding requests to various LLM backends (OpenAI-compatible APIs like llama.cpp, or actual Ollama instances). Request metadata is logged to SQLite; storing conversation content is optional.
 
 The main motivation for creating this was to get the Home Assistant Ollama integration to work with llama.cpp.  I've also always wanted a better way to log requests and responses from other LLM based apps (i.e. Open Web UI).  This proxy has a web interface which shows all of the messages including the full context and the system prompt which is really useful for debugging.
 
@@ -11,6 +11,7 @@ The main motivation for creating this was to get the Home Assistant Ollama integ
 - **Multiple Backend Support** - Connect to OpenAI-compatible APIs (e.g., llama.cpp) or Ollama instances
 - **Streaming Support** - Full support for streaming responses with minimal latency
 - **Request/Response Logging** - All interactions logged to SQLite with timestamps, latency, and error tracking
+- **Metadata-Only Logging** - Optional mode keeps inspection metadata without retaining prompts, responses, raw bodies, or tool results
 - **Web UI** - Built-in interface for viewing logs, request/response details, and configuration
 - **JSON Logs API** - Query logged frontend/backend requests and responses from `/api/logs`
 - **Model Metadata Passthrough** - Preserves upstream context-window metadata such as `max_model_len` and `details.context_length`
@@ -21,28 +22,45 @@ The main motivation for creating this was to get the Home Assistant Ollama integ
 - **Minimal Dependencies** - Uses Go plus TOML parsing and a pure-Go SQLite driver; no C compiler is required
 - **Highly Configurable** - Fine-tune logging, timeouts, CORS, database cleanup, and more
 
+## pi0n00r Compatibility Fork
+
+This fork stays close to [stevelittlefish/llm_proxy](https://github.com/stevelittlefish/llm_proxy) while tightening Ollama-to-OpenAI compatibility:
+
+- `format: "json"` becomes OpenAI JSON-object mode.
+- Ollama schema objects become OpenAI `json_schema` response formats with `strict: false` unless an explicit OpenAI-style envelope requests otherwise.
+- Request-scoped `think: false` becomes `reasoning_effort: "none"` on both `/api/chat` and `/api/generate`.
+- `keep_alive` and `options.num_ctx` are accepted only when they match explicitly configured server-managed values; unsupported or conflicting claims return HTTP 400.
+- OpenAI-backed `/api/generate` uses Chat Completions instead of the legacy Completions endpoint.
+- Streamed and non-streamed tool calls use the same Ollama argument-object shape and preserve tool-call IDs.
+- IPv6 listeners and displayed frontend URLs use bracket-safe host/port construction.
+
+See [docs/fleet-compatibility.md](docs/fleet-compatibility.md) for the exact contract. `/api/embed` is intentionally absent until a tested consumer requires it.
+
 ## Quick Start with Docker
 
-The easiest way to run LLM Proxy is using the pre-built Docker images:
+Build the compatibility fork locally so the image contains the additions
+documented above:
 
 ### Using Docker Run
 
 ```bash
-# 1. Create a config file
-curl -O https://raw.githubusercontent.com/stevelittlefish/llm_proxy/master/config.toml.example
-mv config.toml.example config.toml
+# 1. Fetch the source and create a config file
+git clone https://github.com/pi0n00r/llm_proxy.git
+cd llm_proxy
+cp config.toml.example config.toml
 # Edit config.toml to configure your backend
 
-# 2. Create data directory
+# 2. Build the image and create the data directory
+docker build -t pi0n00r/llm-proxy:local .
 mkdir -p data
 
 # 3. Run the container
 docker run -d \
   --name llm-proxy \
-  -p 11434:11434 \
+  -p 6666:6666 \
   -v $(pwd)/config.toml:/app/config/config.toml:ro \
   -v $(pwd)/data:/app/data \
-  ghcr.io/stevelittlefish/llm_proxy:latest
+  pi0n00r/llm-proxy:local
 ```
 
 ### Using Docker Compose
@@ -54,11 +72,12 @@ version: '3.8'
 
 services:
   llm-proxy:
-    image: ghcr.io/stevelittlefish/llm_proxy:latest
+    build: .
+    image: pi0n00r/llm-proxy:local
     container_name: llm-proxy
     restart: unless-stopped
     ports:
-      - "11434:11434"
+      - "6666:6666"
     volumes:
       - ./config.toml:/app/config/config.toml:ro
       - ./data:/app/data
@@ -67,9 +86,10 @@ services:
 Then run:
 
 ```bash
-# Get the example config
-curl -O https://raw.githubusercontent.com/stevelittlefish/llm_proxy/master/config.toml.example
-mv config.toml.example config.toml
+# Get the source and example config
+git clone https://github.com/pi0n00r/llm_proxy.git
+cd llm_proxy
+cp config.toml.example config.toml
 # Edit config.toml to configure your backend
 
 # Create data directory
@@ -91,26 +111,11 @@ This proxy is designed to sit between Home Assistant (or any Ollama client) and 
 
 ## Installation
 
-### Download Pre-built Binaries
+### Pre-built Binaries
 
-The easiest way to get started is to download a pre-built binary from the [releases page](https://github.com/stevelittlefish/llm_proxy/releases).
-
-1. Download the Linux x86_64 archive: `llm_proxy_VERSION_linux_amd64.tar.gz`
-
-**Note:** Pre-built binaries are currently only available for Linux x86_64. macOS, Windows, and ARM64 users should [build from source](#build-from-source) or use Docker.
-
-2. Extract the archive:
-   ```bash
-   tar -xzf llm_proxy_VERSION_linux_amd64.tar.gz
-   cd llm_proxy_VERSION_linux_amd64
-   ```
-
-3. Edit `config.toml` to configure your backend
-
-4. Run the proxy:
-   ```bash
-   ./llm_proxy
-   ```
+The upstream project's [release binaries](https://github.com/stevelittlefish/llm_proxy/releases)
+do not contain this fork's compatibility additions. Build this fork from
+source or with Docker until a pi0n00r release is published.
 
 ### Build from Source
 
@@ -125,7 +130,7 @@ If you prefer to build from source:
 Clone the repository and then do:
 
 ```bash
-git clone https://github.com/stevelittlefish/llm_proxy
+git clone https://github.com/pi0n00r/llm_proxy
 cd llm_proxy
 cp config.toml.example config.toml
 # Edit the file to change settings
@@ -141,7 +146,7 @@ Or use the included helper script:
 #### Build Binary
 
 ```bash
-git clone https://github.com/stevelittlefish/llm_proxy
+git clone https://github.com/pi0n00r/llm_proxy
 cd llm_proxy
 go mod download
 CGO_ENABLED=0 go build -o llm_proxy
@@ -157,10 +162,10 @@ Create a `config.toml` file based on the provided example:
 
 ```toml
 [server]
-host = "0.0.0.0"
-port = 11434
+host = "::"
+port = 6666
 enable_cors = false
-log_messages = true
+log_messages = false
 log_raw_requests = false
 log_raw_responses = false
 verbose = false
@@ -178,6 +183,11 @@ force_prompt_cache = false
 path = "./data/llm_proxy.db"
 max_requests = 100
 cleanup_interval = 5
+store_content = false
+
+[ollama_compatibility]
+server_managed_keep_alive = "-1"
+server_managed_num_ctx = 131072
 
 [request_sanitization]
 max_tokens_policy = "preserve"
@@ -201,8 +211,8 @@ enabled = false
 ### Configuration Options
 
 #### Server
-- `host`: IP address to bind to (default: `0.0.0.0`)
-- `port`: Port to listen on (default: `11434` - Ollama's default port)
+- `host`: IP address to bind to (default: `0.0.0.0`). Use `::` for a dual-stack listener on hosts whose network stack permits IPv4-mapped IPv6 sockets.
+- `port`: Port to listen on (application default: `11434`; this fork's example uses reserved compatibility port `6666`)
 - `enable_cors`: Enable CORS middleware (default: `false`) - this will allow any web page to directly access the server via javascript
 - `log_messages`: Log message content in human-readable format to stdout (default: `false`)
 - `log_raw_requests`: Log raw JSON request payloads (pretty-printed) to stdout (default: `false`)
@@ -258,6 +268,9 @@ tool_blacklist = ["web_search", "execute_code", "sensitive_tool"]
 - `path`: Path to SQLite database file (default: `./data/llm_proxy.db`)
 - `max_requests`: Maximum number of requests to keep in the database (default: `100`). Older requests are automatically deleted during cleanup.
 - `cleanup_interval`: How often (in minutes) to run the cleanup task (default: `5`). Set to `0` to disable automatic cleanup.
+- `store_content`: Store prompts, responses, raw frontend/backend bodies, tool results, and detailed error text (default: `true` for backward compatibility). Set to `false` to retain metadata only.
+
+When `store_content = false`, the UI and logs API still expose endpoint, model, status, latency, streaming mode, and backend identity. Content columns are empty, and detailed errors are replaced with a content-free failure marker. Keep stdout content logging disabled separately with `log_messages = false`, `log_raw_requests = false`, and `log_raw_responses = false`.
 
 **Database Cleanup:**
 - The cleanup task runs automatically in the background based on the `cleanup_interval`
@@ -265,6 +278,12 @@ tool_blacklist = ["web_search", "execute_code", "sensitive_tool"]
 - The first cleanup runs immediately on startup, then repeats at the configured interval
 - Set `max_requests` to `0` or `cleanup_interval` to `0` to disable automatic cleanup
 - All request/response data is permanently deleted when cleaned up
+
+#### Ollama Compatibility
+- `server_managed_keep_alive`: The model-residence value already enforced by the OpenAI-compatible server, such as `"-1"`.
+- `server_managed_num_ctx`: The context window already enforced by the OpenAI-compatible server, such as `131072`.
+
+These settings apply only when `backend.type = "openai"`. Matching client hints are acknowledged and removed before forwarding. Conflicting values return HTTP 400. If no corresponding server-managed value is configured, a client that sends the unsupported hint receives HTTP 400 instead of a false success.
 
 #### Request Sanitization
 - `max_tokens_policy`: How to handle incoming maximum-token parameters (default: `"preserve"`)
@@ -349,8 +368,9 @@ mode = "always"
 - `"on"`: Force `think: true`
 
 **Behavior:**
-- Applies only to chat endpoints (`/api/chat` and `/v1/chat/completions`), not `/api/generate`
-- Only materializes when `backend.type = "ollama"`, because Ollama exposes thinking control on native `/api/chat`; the OpenAI backend has no equivalent and does not forward `think`
+- The configured override applies only to chat endpoints and materializes only when `backend.type = "ollama"`.
+- Independently of that override, a client-supplied `think: false` on `/api/chat` or `/api/generate` becomes request-scoped `reasoning_effort: "none"` when `backend.type = "openai"`.
+- `think: true` leaves the OpenAI-compatible backend's reasoning behavior unchanged.
 - Useful for OpenAI-compatible clients that cannot toggle Ollama thinking through `/v1/chat/completions`, while the proxy can still set the native Ollama field on the backend request
 
 **Example Configuration:**
@@ -366,7 +386,7 @@ thinking = "off"
 - Self-contained, removable mitigation for two known bugs in vLLM's `gemma4` tool-call and reasoning parsers, only relevant when `backend.type = "openai"` and the backend is vLLM serving Gemma 4 with `--tool-call-parser gemma4 --reasoning-parser gemma4`
 - Detects when vLLM's tool-call parser leaks raw control-token tool-call syntax into the response `content` field instead of producing a structured `tool_calls` delta, and transparently retries (or sends a short internal follow-up turn if real content already streamed to the client) so the client never sees the corrupted text
 - Also strips leaked `<|channel>thought ... <channel|>` reasoning-channel wrapper tokens from streamed content
-- Applies only to the streaming chat path (`/api/chat` and `/v1/chat/completions`); does not affect `/api/generate` or the Ollama backend
+- Applies to streaming requests translated through the OpenAI chat path, including OpenAI-backed `/api/generate`; it does not affect the Ollama backend
 - Disabled by default; turning it on does not change behavior for any other model or backend
 
 **Example Configuration:**
@@ -399,7 +419,7 @@ When running from source, the helper script does the same thing with `go run`:
 
 #### Generate Endpoint (Streaming)
 ```bash
-curl -X POST http://localhost:11434/api/generate \
+curl -X POST http://localhost:6666/api/generate \
   -H "Content-Type: application/json" \
   -d '{
     "model": "llama2",
@@ -410,7 +430,7 @@ curl -X POST http://localhost:11434/api/generate \
 
 #### Chat Endpoint (Streaming)
 ```bash
-curl -X POST http://localhost:11434/api/chat \
+curl -X POST http://localhost:6666/api/chat \
   -H "Content-Type: application/json" \
   -d '{
     "model": "llama2",
@@ -423,7 +443,7 @@ curl -X POST http://localhost:11434/api/chat \
 
 #### List Models
 ```bash
-curl http://localhost:11434/api/tags
+curl http://localhost:6666/api/tags
 ```
 
 ### Chat Client
@@ -477,7 +497,7 @@ In Home Assistant, configure the Ollama integration to point to your proxy:
 conversation:
   llm:
     provider: ollama
-    base_url: "http://your-proxy-ip:11434"
+    base_url: "http://your-proxy-ip:6666"
     model: "llama2"
 ```
 
@@ -494,6 +514,7 @@ The proxy implements the following Ollama API endpoints:
 
 Model listing and show responses preserve upstream metadata where available, including context length fields used by OpenAI- and Ollama-compatible clients.
 If an OpenAI-compatible backend does not provide a usable `/v1/models` response, model listing falls back to a single model named `default` so clients that require discovery can still connect.
+For OpenAI-compatible backends, `/api/generate` is translated through `/v1/chat/completions`, preserving system text, prompt, structured format, stream mode, and supported options.
 
 ### OpenAI-Compatible Endpoints
 
@@ -542,7 +563,7 @@ Example Ollama configuration:
 ```toml
 [backend]
 type = "ollama"
-endpoint = "http://localhost:11435"
+endpoint = "http://localhost:11434"
 ```
 
 ## Architecture

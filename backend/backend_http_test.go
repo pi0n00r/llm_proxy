@@ -70,6 +70,110 @@ func TestOpenAIBackendChatTranslatesRequestAndNonStreamingResponse(t *testing.T)
 	}
 }
 
+func TestOpenAIBackendGenerateUsesChatCompletions(t *testing.T) {
+	var gotReq models.OpenAIChatRequest
+	think := false
+	b := NewOpenAIBackend("http://backend.test", 10, false, false)
+	b.client.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("path = %q, want /v1/chat/completions", r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&gotReq); err != nil {
+			t.Fatalf("Decode() error = %v", err)
+		}
+		return jsonResponse(`{"choices":[{"message":{"role":"assistant","content":"GENERATE_OK"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":1}}`), nil
+	})
+
+	respChan, meta, err := b.Generate(context.Background(), models.GenerateRequest{
+		Model:  "gemma4-aimee",
+		System: "Follow instructions.",
+		Prompt: "Reply exactly GENERATE_OK",
+		Format: json.RawMessage(`"json"`),
+		Think:  &think,
+		Options: map[string]interface{}{
+			"temperature": float64(0.2),
+			"num_predict": float64(32),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	resp := <-respChan
+	if resp.Response != "GENERATE_OK" || !resp.Done {
+		t.Fatalf("response = %#v", resp)
+	}
+	if meta.URL != "http://backend.test/v1/chat/completions" {
+		t.Fatalf("metadata URL = %q", meta.URL)
+	}
+	if len(gotReq.Messages) != 2 ||
+		gotReq.Messages[0].Role != "system" ||
+		gotReq.Messages[1].Content != "Reply exactly GENERATE_OK" {
+		t.Fatalf("messages = %#v", gotReq.Messages)
+	}
+	if string(gotReq.ResponseFormat) != `{"type":"json_object"}` {
+		t.Fatalf("response_format = %s", gotReq.ResponseFormat)
+	}
+	if gotReq.MaxTokens != 32 || gotReq.Temperature != 0.2 {
+		t.Fatalf("translated options = %#v", gotReq)
+	}
+	if gotReq.ReasoningEffort != "none" {
+		t.Fatalf("reasoning_effort = %q, want none", gotReq.ReasoningEffort)
+	}
+}
+
+func TestOpenAIBackendNonStreamingToolCallsUseOllamaArgumentObjects(t *testing.T) {
+	b := NewOpenAIBackend("http://backend.test", 10, false, false)
+	b.client.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return jsonResponse(`{
+			"choices":[{
+				"message":{
+					"role":"assistant",
+					"content":"",
+					"tool_calls":[{
+						"id":"call-1",
+						"type":"function",
+						"function":{"name":"record_probe","arguments":"{\"value\":\"nonstream\"}"}
+					}]
+				},
+				"finish_reason":"tool_calls"
+			}]
+		}`), nil
+	})
+
+	respChan, _, err := b.Chat(context.Background(), models.ChatRequest{
+		Model:    "gemma4-aimee",
+		Messages: []models.Message{{Role: "user", Content: "call the tool"}},
+	})
+	if err != nil {
+		t.Fatalf("Chat() error = %v", err)
+	}
+	resp := <-respChan
+	if len(resp.Message.ToolCalls) != 1 {
+		t.Fatalf("ToolCalls = %#v, want one", resp.Message.ToolCalls)
+	}
+	call, ok := resp.Message.ToolCalls[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("tool call type = %T", resp.Message.ToolCalls[0])
+	}
+	if _, ok := call["type"]; ok {
+		t.Fatalf("Ollama tool call retained OpenAI type: %#v", call)
+	}
+	if _, ok := call["index"]; ok {
+		t.Fatalf("Ollama tool call retained OpenAI index: %#v", call)
+	}
+	function := call["function"].(map[string]interface{})
+	arguments, ok := function["arguments"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("arguments = %#v (%T), want object", function["arguments"], function["arguments"])
+	}
+	if arguments["value"] != "nonstream" {
+		t.Fatalf("arguments = %#v", arguments)
+	}
+	if call["id"] != "call-1" {
+		t.Fatalf("id = %#v, want call-1", call["id"])
+	}
+}
+
 func TestOpenAIBackendChatPreservesRawOpenAIFields(t *testing.T) {
 	var gotReq map[string]json.RawMessage
 	b := NewOpenAIBackend("http://backend.test", 10, true, false)

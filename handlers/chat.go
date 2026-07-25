@@ -69,6 +69,11 @@ func (h *ChatHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	originalLastMessage := lastMessageContent(req.Messages)
 	originalMessages := cloneMessages(req.Messages)
 
+	if err := applyServerManagedChatCompatibility(&req, h.config); err != nil {
+		h.logInvalidRequest(startTime, string(bodyBytes), err.Error())
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	applyChatRequestSanitization(&req, h.config)
 	applyChatFeatures(&req, h.config)
 	clientWantsStream := req.Stream
@@ -243,7 +248,7 @@ func (h *ChatHandler) logRequest(startTime time.Time, model string, stream bool,
 		Stream:           stream,
 		BackendType:      h.config.Backend.Type,
 		Error:            errMsg,
-		FrontendURL:      fmt.Sprintf("http://%s:%d/api/chat", h.config.Server.Host, h.config.Server.Port),
+		FrontendURL:      frontendURL(h.config, "/api/chat"),
 		BackendURL:       backendURL,
 		FrontendRequest:  frontendReq,
 		FrontendResponse: frontendResp,
@@ -269,7 +274,7 @@ func (h *ChatHandler) logInvalidRequest(startTime time.Time, frontendReq string,
 		LatencyMs:       time.Since(startTime).Milliseconds(),
 		BackendType:     h.config.Backend.Type,
 		Error:           errMsg,
-		FrontendURL:     fmt.Sprintf("http://%s:%d/api/chat", h.config.Server.Host, h.config.Server.Port),
+		FrontendURL:     frontendURL(h.config, "/api/chat"),
 		FrontendRequest: frontendReq,
 	}
 

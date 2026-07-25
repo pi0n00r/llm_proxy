@@ -66,6 +66,11 @@ func (h *GenerateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if err := applyServerManagedGenerateCompatibility(&req, h.config); err != nil {
+		h.logInvalidRequest(startTime, string(bodyBytes), err.Error())
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	applyGenerateRequestSanitization(&req, h.config)
 	clientWantsStream := req.Stream
 	req.Stream = resolveStream(clientWantsStream, h.config)
@@ -215,7 +220,7 @@ func (h *GenerateHandler) logRequest(startTime time.Time, req models.GenerateReq
 		Stream:           stream,
 		BackendType:      h.config.Backend.Type,
 		Error:            errMsg,
-		FrontendURL:      fmt.Sprintf("http://%s:%d/api/generate", h.config.Server.Host, h.config.Server.Port),
+		FrontendURL:      frontendURL(h.config, "/api/generate"),
 		BackendURL:       backendURL,
 		FrontendRequest:  frontendReq,
 		FrontendResponse: frontendResp,
@@ -241,7 +246,7 @@ func (h *GenerateHandler) logInvalidRequest(startTime time.Time, frontendReq str
 		LatencyMs:       time.Since(startTime).Milliseconds(),
 		BackendType:     h.config.Backend.Type,
 		Error:           errMsg,
-		FrontendURL:     fmt.Sprintf("http://%s:%d/api/generate", h.config.Server.Host, h.config.Server.Port),
+		FrontendURL:     frontendURL(h.config, "/api/generate"),
 		FrontendRequest: frontendReq,
 	}
 

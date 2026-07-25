@@ -33,6 +33,7 @@ func TestHomeHandlerDisplaysConfigSettings(t *testing.T) {
 		"Verbose":              true,
 		"DatabaseMaxRequests":  250,
 		"DatabaseCleanupMins":  15,
+		"DatabaseStoreContent": false,
 	}
 
 	rec := httptest.NewRecorder()
@@ -56,7 +57,9 @@ func TestHomeHandlerDisplaysConfigSettings(t *testing.T) {
 		"Database",
 		"/tmp/llm_proxy.db",
 		"250",
-		"15 min",
+			"15 min",
+			"Content Storage",
+			"metadata only",
 		"Max Tokens Policy",
 		"drop_above",
 		"limit: 4096",

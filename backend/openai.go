@@ -65,73 +65,52 @@ func (o *OpenAIBackend) postChatCompletion(ctx context.Context, data []byte, met
 	return resp, nil
 }
 
-// Generate handles text generation requests by translating to OpenAI format
+// Generate maps Ollama generation onto Chat Completions. Instruction-tuned
+// OpenAI-compatible backends commonly expose legacy /v1/completions while not
+// producing useful output through it; Chat Completions is also the only path
+// that can faithfully carry Ollama's system text and structured format.
 func (o *OpenAIBackend) Generate(ctx context.Context, req models.GenerateRequest) (<-chan models.GenerateResponse, *BackendMetadata, error) {
 	respChan := make(chan models.GenerateResponse, 10)
-	metadata := &BackendMetadata{}
-
-	// Translate Ollama request to OpenAI completion request
-	openaiReq := models.OpenAICompletionRequest{
-		Model:       req.Model,
-		Prompt:      req.Prompt,
-		Stream:      req.Stream,
-		CachePrompt: o.forcePromptCache,
+	messages := make([]models.Message, 0, 2)
+	if req.System != "" {
+		messages = append(messages, models.Message{Role: "system", Content: req.System})
 	}
+	messages = append(messages, models.Message{Role: "user", Content: req.Prompt})
 
-	// Map Ollama options to OpenAI parameters
-	if req.Options != nil {
-		if temp, ok := req.Options["temperature"].(float64); ok {
-			openaiReq.Temperature = temp
-		}
-		if maxTokens, ok := req.Options["num_predict"].(float64); ok {
-			openaiReq.MaxTokens = int(maxTokens)
-		}
-		if topP, ok := req.Options["top_p"].(float64); ok {
-			openaiReq.TopP = topP
-		}
-	}
-
-	data, err := json.Marshal(openaiReq)
+	chatResponses, metadata, err := o.Chat(ctx, models.ChatRequest{
+		Model:    req.Model,
+		Messages: messages,
+		Stream:   req.Stream,
+		Options:  req.Options,
+		Format:   req.Format,
+		Think:    req.Think,
+	})
 	if err != nil {
 		close(respChan)
-		return respChan, metadata, fmt.Errorf("failed to marshal request: %w", err)
+		return respChan, metadata, err
 	}
 
-	// Store raw backend request
-	metadata.RawRequest = string(data)
-	metadata.URL = o.endpoint + "/v1/completions"
-
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", metadata.URL, bytes.NewReader(data))
-	if err != nil {
-		close(respChan)
-		return respChan, metadata, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := o.client.Do(httpReq)
-	if err != nil {
-		close(respChan)
-		return respChan, metadata, fmt.Errorf("request failed: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		metadata.RawResponse = string(body)
-		close(respChan)
-		return respChan, metadata, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
-	}
-
-	// Handle streaming response
 	go func() {
-		defer resp.Body.Close()
 		defer close(respChan)
-
-		if req.Stream {
-			o.handleStreamingCompletion(ctx, resp.Body, respChan, req.Model, metadata)
-		} else {
-			o.handleNonStreamingCompletion(resp.Body, respChan, req.Model, metadata)
+		for response := range chatResponses {
+			generated := models.GenerateResponse{
+				Model:              response.Model,
+				CreatedAt:          response.CreatedAt,
+				Response:           response.Message.Content,
+				Done:               response.Done,
+				DoneReason:         response.DoneReason,
+				TotalDuration:      response.TotalDuration,
+				LoadDuration:       response.LoadDuration,
+				PromptEvalCount:    response.PromptEvalCount,
+				PromptEvalDuration: response.PromptEvalDuration,
+				EvalCount:          response.EvalCount,
+				EvalDuration:       response.EvalDuration,
+			}
+			select {
+			case respChan <- generated:
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 
@@ -449,6 +428,11 @@ func (o *OpenAIBackend) Chat(ctx context.Context, req models.ChatRequest) (<-cha
 }
 
 func (o *OpenAIBackend) buildOpenAIChatRequest(req models.ChatRequest, convertedMessages []models.Message) ([]byte, error) {
+	responseFormat, err := ollamaResponseFormat(req.Format)
+	if err != nil {
+		return nil, err
+	}
+
 	if req.OpenAIRaw != nil {
 		raw := cloneRawMessageMap(req.OpenAIRaw)
 		setRawMessage(raw, "model", req.Model)
@@ -477,16 +461,27 @@ func (o *OpenAIBackend) buildOpenAIChatRequest(req models.ChatRequest, converted
 		if o.forcePromptCache {
 			setRawMessage(raw, "cache_prompt", true)
 		}
+		delete(raw, "think")
+		if req.Think != nil && !*req.Think {
+			setRawMessage(raw, "reasoning_effort", "none")
+		}
+		if len(responseFormat) > 0 {
+			raw["response_format"] = responseFormat
+		}
 		return json.Marshal(raw)
 	}
 
 	// Translate Ollama request to OpenAI chat request
 	openaiReq := models.OpenAIChatRequest{
-		Model:       req.Model,
-		Messages:    convertedMessages,
-		Stream:      req.Stream,
-		Tools:       req.Tools,
-		CachePrompt: o.forcePromptCache,
+		Model:          req.Model,
+		Messages:       convertedMessages,
+		Stream:         req.Stream,
+		Tools:          req.Tools,
+		ResponseFormat: responseFormat,
+		CachePrompt:    o.forcePromptCache,
+	}
+	if req.Think != nil && !*req.Think {
+		openaiReq.ReasoningEffort = "none"
 	}
 
 	// Map Ollama options to OpenAI parameters
@@ -503,6 +498,42 @@ func (o *OpenAIBackend) buildOpenAIChatRequest(req models.ChatRequest, converted
 	}
 
 	return json.Marshal(openaiReq)
+}
+
+func ollamaResponseFormat(format json.RawMessage) (json.RawMessage, error) {
+	if len(format) == 0 || string(format) == "null" {
+		return nil, nil
+	}
+
+	var formatName string
+	if err := json.Unmarshal(format, &formatName); err == nil {
+		if formatName != "json" {
+			return nil, fmt.Errorf("unsupported Ollama format %q", formatName)
+		}
+		return json.RawMessage(`{"type":"json_object"}`), nil
+	}
+
+	var schema map[string]interface{}
+	if err := json.Unmarshal(format, &schema); err != nil {
+		return nil, fmt.Errorf("invalid Ollama format: %w", err)
+	}
+
+	if responseType, _ := schema["type"].(string); responseType == "json_schema" {
+		if _, ok := schema["json_schema"].(map[string]interface{}); !ok {
+			return nil, fmt.Errorf("invalid Ollama json_schema format")
+		}
+		return json.Marshal(schema)
+	}
+
+	envelope := map[string]interface{}{
+		"type": "json_schema",
+		"json_schema": map[string]interface{}{
+			"name":   "ollama_response",
+			"strict": false,
+			"schema": schema,
+		},
+	}
+	return json.Marshal(envelope)
 }
 
 func cloneRawMessageMap(raw map[string]json.RawMessage) map[string]json.RawMessage {
@@ -759,6 +790,45 @@ func buildToolCallsArray(toolCallsState map[int]struct {
 	return toolCalls
 }
 
+func normalizeToolCallsForOllama(toolCalls []interface{}) []interface{} {
+	if len(toolCalls) == 0 {
+		return nil
+	}
+
+	normalized := make([]interface{}, 0, len(toolCalls))
+	for _, toolCall := range toolCalls {
+		original, ok := toolCall.(map[string]interface{})
+		if !ok {
+			normalized = append(normalized, toolCall)
+			continue
+		}
+
+		converted := make(map[string]interface{}, len(original))
+		for key, value := range original {
+			if key != "type" && key != "index" {
+				converted[key] = value
+			}
+		}
+
+		if originalFunction, ok := original["function"].(map[string]interface{}); ok {
+			function := make(map[string]interface{}, len(originalFunction))
+			for key, value := range originalFunction {
+				function[key] = value
+			}
+			if arguments, ok := function["arguments"].(string); ok {
+				var decoded interface{}
+				if err := json.Unmarshal([]byte(arguments), &decoded); err == nil {
+					function["arguments"] = decoded
+				}
+			}
+			converted["function"] = function
+		}
+
+		normalized = append(normalized, converted)
+	}
+	return normalized
+}
+
 // handleNonStreamingChat processes non-streaming OpenAI chat responses
 func (o *OpenAIBackend) handleNonStreamingChat(body io.Reader, respChan chan<- models.ChatResponse, model string, metadata *BackendMetadata) {
 	startTime := time.Now()
@@ -794,11 +864,12 @@ func (o *OpenAIBackend) handleNonStreamingChat(body io.Reader, respChan chan<- m
 		// Calculate durations
 		totalDuration := time.Since(startTime).Nanoseconds()
 
-		// Message already includes ToolCalls field, so it passes through automatically
+		message := *choice.Message
+		message.ToolCalls = normalizeToolCallsForOllama(message.ToolCalls)
 		respChan <- models.ChatResponse{
 			Model:              model,
 			CreatedAt:          time.Now(),
-			Message:            *choice.Message,
+			Message:            message,
 			Done:               true,
 			DoneReason:         doneReason,
 			TotalDuration:      totalDuration + 1,

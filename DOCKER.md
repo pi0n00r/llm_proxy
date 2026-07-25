@@ -7,73 +7,11 @@ This guide explains how to run the LLM proxy server using Docker.
 - Docker Engine 20.10+
 - Docker Compose 1.29+ (optional, for orchestration)
 
-## Using Pre-built Images (Recommended)
+## Image Status
 
-Pre-built Docker images are available from GitHub Container Registry. This is the easiest way to get started:
-
-### Quick Start with Pre-built Image
-
-```bash
-# 1. Get the example config
-curl -O https://raw.githubusercontent.com/stevelittlefish/llm_proxy/master/config.toml.example
-mv config.toml.example config.toml
-# Edit config.toml to configure your backend
-
-# 2. Create data directory
-mkdir -p data
-
-# 3. Run the container
-docker run -d \
-  --name llm-proxy \
-  -p 11434:11434 \
-  -v $(pwd)/config.toml:/app/config/config.toml:ro \
-  -v $(pwd)/data:/app/data \
-  ghcr.io/stevelittlefish/llm_proxy:latest
-```
-
-### Using Docker Compose with Pre-built Image
-
-Create a simple `docker-compose.yml`:
-
-```yaml
-version: '3.8'
-
-services:
-  llm-proxy:
-    image: ghcr.io/stevelittlefish/llm_proxy:latest
-    container_name: llm-proxy
-    restart: unless-stopped
-    ports:
-      - "11434:11434"
-    volumes:
-      - ./config.toml:/app/config/config.toml:ro
-      - ./data:/app/data
-```
-
-Then run:
-
-```bash
-docker-compose up -d
-```
-
-### Available Image Tags
-
-- `latest` - Latest stable release
-- `v1.0.0` - Specific version (replace with desired version)
-- `v1.0` - Latest patch version of 1.0.x
-- `v1` - Latest minor version of 1.x.x
-
-Examples:
-```bash
-# Use latest version
-docker pull ghcr.io/stevelittlefish/llm_proxy:latest
-
-# Use specific version
-docker pull ghcr.io/stevelittlefish/llm_proxy:v1.0.0
-
-# Use latest 1.x version
-docker pull ghcr.io/stevelittlefish/llm_proxy:v1
-```
+The upstream project's published images do not contain this fork's
+compatibility additions. Build the image from this source tree until a
+`ghcr.io/pi0n00r/llm_proxy` release is published.
 
 ## Building from Source
 
@@ -100,7 +38,7 @@ cp docker-compose.override.yml.example docker-compose.override.yml
 ```
 
 This file enables:
-- Port mapping (default: `11435:11434` to avoid conflicts with local Ollama)
+- Port mapping on compatibility port `6666`
 - Config file volume mount
 - Database persistence directory
 
@@ -131,13 +69,13 @@ docker build -t llm-proxy .
 # Run the container
 docker run -d \
   --name llm-proxy \
-  -p 11435:11434 \
+  -p 6666:6666 \
   -v $(pwd)/config.toml:/app/config/config.toml:ro \
   -v $(pwd)/data:/app/data \
   llm-proxy
 ```
 
-**Note**: The manual Docker command uses port `11435` on the host to avoid conflicts with local Ollama instances.
+**Note**: The compatibility fork uses reserved proxy port `6666`, leaving Ollama's default port untouched.
 
 ### 5. Verify It's Running
 
@@ -148,16 +86,16 @@ docker-compose ps
 # Check logs
 docker-compose logs -f
 
-# Test the endpoint (note: use port 11435 if using the override example)
-curl http://localhost:11435/
+# Test the endpoint
+curl http://localhost:6666/
 # Should show the web UI HTML
 
 # Health check
-curl http://localhost:11435/health
+curl http://localhost:6666/health
 # Should return: "OK"
 
 # List models
-curl http://localhost:11435/api/tags
+curl http://localhost:6666/api/tags
 ```
 
 ## Configuration
@@ -267,7 +205,7 @@ services:
 If you can't reach the proxy from your browser or Home Assistant:
 - Check that `docker-compose.override.yml` exists and has the ports section
 - Verify the port mapping: `docker-compose ps`
-- Ensure the config has `host = "0.0.0.0"` (already set in `config.toml.example`)
+- Ensure the config has `host = "::"` (already set in `config.toml.example`)
 - Check container logs: `docker-compose logs -f`
 
 ### Database permission errors
@@ -280,7 +218,7 @@ chmod 755 data/
 
 ### Port already in use
 
-The default `docker-compose.override.yml.example` uses port `11435` to avoid conflicts with local Ollama.
+The default `docker-compose.override.yml.example` uses port `6666`.
 
 If you need a different port, edit your `docker-compose.override.yml`:
 
@@ -288,7 +226,7 @@ If you need a different port, edit your `docker-compose.override.yml`:
 services:
   llm-proxy:
     ports:
-      - "11436:11434"  # Use external port 11436
+      - "11436:6666"  # Use external port 11436
 ```
 
 ## Production Considerations
@@ -375,11 +313,11 @@ networks:
 
 The proxy includes a built-in web interface:
 
-- **Home page**: `http://localhost:11435/` - Shows configuration overview
-- **Logs**: `http://localhost:11435/logs` - Browse all requests
-- **Details**: `http://localhost:11435/logs/details?id=<id>` - View specific request details
+- **Home page**: `http://localhost:6666/` - Shows configuration overview
+- **Logs**: `http://localhost:6666/logs` - Browse all requests
+- **Details**: `http://localhost:6666/logs/details?id=<id>` - View specific request details
 
-Replace `11435` with your configured port.
+Replace `6666` with your configured port.
 
 ### Multi-stage debugging
 

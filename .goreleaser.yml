@@ -83,7 +83,7 @@ dockers_v2:
     ids:
       - llm_proxy
     images:
-      - "ghcr.io/stevelittlefish/llm_proxy"
+      - "ghcr.io/pi0n00r/llm_proxy"
     tags:
       - "{{ .Tag }}"
       - "v{{ .Major }}"
@@ -96,13 +96,13 @@ dockers_v2:
       "org.opencontainers.image.title": "{{ .ProjectName }}"
       "org.opencontainers.image.revision": "{{ .FullCommit }}"
       "org.opencontainers.image.version": "{{ .Version }}"
-      "org.opencontainers.image.source": "https://github.com/stevelittlefish/llm_proxy"
+      "org.opencontainers.image.source": "https://github.com/pi0n00r/llm_proxy"
       "org.opencontainers.image.description": "LLM Proxy - Ollama-compatible API with multiple backend support"
       "org.opencontainers.image.licenses": "MIT"
 
 release:
   github:
-    owner: stevelittlefish
+    owner: pi0n00r
     name: llm_proxy
   draft: false
   prerelease: auto
@@ -115,7 +115,7 @@ release:
     Pre-built Docker images are available on GitHub Container Registry:
     
     ```bash
-    docker pull ghcr.io/stevelittlefish/llm_proxy:{{ .Tag }}
+    docker pull ghcr.io/pi0n00r/llm_proxy:{{ .Tag }}
     ```
     
     See the [Quick Start with Docker](#quick-start-with-docker) section in the README for usage instructions.
@@ -134,9 +134,9 @@ release:
     3. Edit `config.toml` to configure your backend
     4. Run `./llm_proxy`
     
-    See [README.md](https://github.com/stevelittlefish/llm_proxy/blob/main/README.md) for detailed documentation.
+    See [README.md](https://github.com/pi0n00r/llm_proxy/blob/master/README.md) for detailed documentation.
   footer: |
-    **Full Changelog**: https://github.com/stevelittlefish/llm_proxy/compare/{{ .PreviousTag }}...{{ .Tag }}
+    **Full Changelog**: https://github.com/pi0n00r/llm_proxy/compare/{{ .PreviousTag }}...{{ .Tag }}
     
     ---
     

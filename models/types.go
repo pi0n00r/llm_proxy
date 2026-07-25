@@ -22,6 +22,7 @@ type GenerateRequest struct {
 	Template  string                 `json:"template,omitempty"`
 	Raw       bool                   `json:"raw,omitempty"`
 	KeepAlive string                 `json:"keep_alive,omitempty"`
+	Think     *bool                  `json:"think,omitempty"`
 }
 
 // UnmarshalJSON accepts both of Ollama's documented keep_alive forms: duration
@@ -390,17 +391,19 @@ type OpenAICompletionRequest struct {
 
 // OpenAIChatRequest represents an OpenAI chat request
 type OpenAIChatRequest struct {
-	Model            string        `json:"model"`
-	Messages         []Message     `json:"messages"`
-	Stream           bool          `json:"stream,omitempty"`
-	MaxTokens        int           `json:"max_tokens,omitempty"`
-	Temperature      float64       `json:"temperature,omitempty"`
-	TopP             float64       `json:"top_p,omitempty"`
-	Stop             interface{}   `json:"stop,omitempty"`
-	FrequencyPenalty float64       `json:"frequency_penalty,omitempty"`
-	PresencePenalty  float64       `json:"presence_penalty,omitempty"`
-	Tools            []interface{} `json:"tools,omitempty"`
-	CachePrompt      bool          `json:"cache_prompt,omitempty"`
+	Model            string          `json:"model"`
+	Messages         []Message       `json:"messages"`
+	Stream           bool            `json:"stream,omitempty"`
+	MaxTokens        int             `json:"max_tokens,omitempty"`
+	Temperature      float64         `json:"temperature,omitempty"`
+	TopP             float64         `json:"top_p,omitempty"`
+	Stop             interface{}     `json:"stop,omitempty"`
+	FrequencyPenalty float64         `json:"frequency_penalty,omitempty"`
+	PresencePenalty  float64         `json:"presence_penalty,omitempty"`
+	Tools            []interface{}   `json:"tools,omitempty"`
+	ResponseFormat   json.RawMessage `json:"response_format,omitempty"`
+	ReasoningEffort  string          `json:"reasoning_effort,omitempty"`
+	CachePrompt      bool            `json:"cache_prompt,omitempty"`
 }
 
 // OpenAICompletionResponse represents an OpenAI completion response

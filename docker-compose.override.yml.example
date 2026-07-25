@@ -3,8 +3,8 @@ version: '3.8'
 services:
   llm-proxy:
     ports:
-      - 11435:11434
-      # Change the host-side port (11435) if it conflicts with another service.
+      - 6666:6666
+      # Change the host-side port if 6666 conflicts with another service.
     volumes:
       # Mount config file
       - ./config.toml:/app/config/config.toml:ro

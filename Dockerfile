@@ -34,12 +34,12 @@ COPY --from=builder /build/llm_proxy .
 # Create directories for data and config
 RUN mkdir -p /app/data /app/config
 
-# Expose the default Ollama port
-EXPOSE 11434
+# Expose the compatibility-fork example port
+EXPOSE 6666
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:11434/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:6666/health || exit 1
 
 # Run the application
 ENTRYPOINT ["/app/llm_proxy"]

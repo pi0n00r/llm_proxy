@@ -275,6 +275,49 @@ endpoint = "http://localhost:8008"
 	}
 }
 
+func TestLoadFleetCompatibilityAndContentStorage(t *testing.T) {
+	path := writeTestConfig(t, `
+[backend]
+type = "openai"
+endpoint = "http://localhost:8080"
+
+[database]
+store_content = false
+
+[ollama_compatibility]
+server_managed_keep_alive = "-1"
+server_managed_num_ctx = 131072
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Database.StoreContent {
+		t.Fatal("Database.StoreContent = true, want false")
+	}
+	if cfg.OllamaCompatibility.ServerManagedKeepAlive != "-1" ||
+		cfg.OllamaCompatibility.ServerManagedNumCtx != 131072 {
+		t.Fatalf("OllamaCompatibility = %#v", cfg.OllamaCompatibility)
+	}
+}
+
+func TestLoadDefaultsContentStorageEnabled(t *testing.T) {
+	path := writeTestConfig(t, `
+[backend]
+type = "openai"
+endpoint = "http://localhost:8080"
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !cfg.Database.StoreContent {
+		t.Fatal("Database.StoreContent = false, want backward-compatible true default")
+	}
+}
+
 func writeTestConfig(t *testing.T, content string) string {
 	t.Helper()
 

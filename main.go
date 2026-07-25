@@ -4,9 +4,11 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	"llm_proxy/backend"
@@ -59,7 +61,7 @@ func main() {
 
 	// Initialize database
 	log.Printf("Initializing database at %s", cfg.Database.Path)
-	db, err := database.New(cfg.Database.Path)
+	db, err := database.NewWithContentStorage(cfg.Database.Path, cfg.Database.StoreContent)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
@@ -130,6 +132,7 @@ func main() {
 		"Verbose":              cfg.Server.Verbose,
 		"DatabaseMaxRequests":  cfg.Database.MaxRequests,
 		"DatabaseCleanupMins":  cfg.Database.CleanupInterval,
+		"DatabaseStoreContent": cfg.Database.StoreContent,
 	}
 
 	webHandler := handlers.NewWebHandler(db, homeData)
@@ -165,7 +168,7 @@ func main() {
 	})
 
 	// Start HTTP server
-	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
+	addr := net.JoinHostPort(cfg.Server.Host, strconv.Itoa(cfg.Server.Port))
 
 	// Apply middlewares
 	var handler http.Handler = mux

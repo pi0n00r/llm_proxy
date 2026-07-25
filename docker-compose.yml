@@ -8,16 +8,15 @@ services:
     container_name: llm-proxy
     restart: unless-stopped
     # ports:
-    #   - 11434:11434
+    #   - 6666:6666
     # volumes:
     #   # Mount config file
     #   - ./config.toml:/app/config/config.toml:ro
     #   # Mount database directory (allows persistence)
     #   - ./data:/app/data
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:11434/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:6666/health"]
       interval: 30s
       timeout: 3s
       retries: 3
       start_period: 10s
-
