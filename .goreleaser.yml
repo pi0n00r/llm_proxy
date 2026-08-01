@@ -77,34 +77,6 @@ changelog:
     - title: 'Other Changes'
       order: 999
 
-dockers_v2:
-  - id: llm_proxy
-    dockerfile: Dockerfile.goreleaser
-    ids:
-      - llm_proxy
-    images:
-      - "ghcr.io/pi0n00r/llm_proxy"
-    tags:
-      - "{{ .Tag }}"
-      - "v{{ .Major }}"
-      - "v{{ .Major }}.{{ .Minor }}"
-      - "latest"
-    platforms:
-      - linux/amd64
-    # A single-platform Docker image preserves Dockerfile HEALTHCHECK metadata.
-    # Provenance/SBOM attestations would force an OCI index for this package.
-    sbom: false
-    flags:
-      - "--provenance=false"
-    labels:
-      "org.opencontainers.image.created": "{{ .Date }}"
-      "org.opencontainers.image.title": "{{ .ProjectName }}"
-      "org.opencontainers.image.revision": "{{ .FullCommit }}"
-      "org.opencontainers.image.version": "{{ .Version }}"
-      "org.opencontainers.image.source": "https://github.com/pi0n00r/llm_proxy"
-      "org.opencontainers.image.description": "LLM Proxy - Ollama-compatible API with multiple backend support"
-      "org.opencontainers.image.licenses": "Apache-2.0"
-
 release:
   github:
     owner: pi0n00r
@@ -112,6 +84,7 @@ release:
   draft: false
   prerelease: auto
   mode: replace
+  replace_existing_artifacts: true
   header: |
     ## LLM Proxy {{ .Tag }}
     

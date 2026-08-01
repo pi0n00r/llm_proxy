@@ -74,3 +74,56 @@ jobs:
           args: release --clean --config ${{ steps.release-config.outputs.path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish container package
+        env:
+          IMAGE: ghcr.io/pi0n00r/llm_proxy
+        run: |
+          set -euo pipefail
+
+          tag="$(git describe --tags --exact-match)"
+          version="${tag#v}"
+          if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-.+)?$ ]]; then
+            echo "Unsupported release tag: $tag" >&2
+            exit 1
+          fi
+          major="${BASH_REMATCH[1]}"
+          minor="${BASH_REMATCH[2]}"
+
+          image_tags=(--tag "$IMAGE:$tag")
+          if [[ "$version" != *-* ]]; then
+            image_tags+=(
+              --tag "$IMAGE:v$major"
+              --tag "$IMAGE:v$major.$minor"
+              --tag "$IMAGE:latest"
+            )
+          fi
+
+          context="$RUNNER_TEMP/llm-proxy-image"
+          mkdir -p "$context/linux/amd64"
+          cp Dockerfile.goreleaser "$context/Dockerfile"
+          cp dist/llm_proxy_linux_amd64_v1/llm_proxy "$context/linux/amd64/llm_proxy"
+
+          revision="$(git rev-parse HEAD)"
+          created="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          docker buildx build \
+            --platform linux/amd64 \
+            --build-arg TARGETPLATFORM=linux/amd64 \
+            --provenance=false \
+            --label "org.opencontainers.image.created=$created" \
+            --label "org.opencontainers.image.title=llm_proxy" \
+            --label "org.opencontainers.image.revision=$revision" \
+            --label "org.opencontainers.image.version=$version" \
+            --label "org.opencontainers.image.source=https://github.com/pi0n00r/llm_proxy" \
+            --label "org.opencontainers.image.description=LLM Proxy - Ollama-compatible API with multiple backend support" \
+            --label "org.opencontainers.image.licenses=Apache-2.0" \
+            "${image_tags[@]}" \
+            --output type=registry,oci-mediatypes=false \
+            --file "$context/Dockerfile" \
+            "$context"
+
+          docker pull "$IMAGE:$tag"
+          test "$(docker image inspect "$IMAGE:$tag" --format '{{.Config.User}}')" = "10001:10001"
+          test "$(docker image inspect "$IMAGE:$tag" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "$revision"
+          docker image inspect "$IMAGE:$tag" --format '{{json .Config.Healthcheck.Test}}' | grep -q 'localhost:6666/health'
+          docker manifest inspect "$IMAGE:$tag" | jq -e '.mediaType == "application/vnd.docker.distribution.manifest.v2+json"' >/dev/null
