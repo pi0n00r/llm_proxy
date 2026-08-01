@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -40,20 +39,24 @@ func (h *GenerateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	startTime := time.Now()
 
-	// Read raw body bytes first for logging
-	bodyBytes, err := io.ReadAll(r.Body)
+	// Read raw body bytes first for optional logging and exact request capture.
+	bodyBytes, status, err := readRequestBody(w, r, h.config.Server.MaxRequestBodyBytes)
 	if err != nil {
 		log.Printf("Generate request: failed to read request body: %v", err)
-		h.logInvalidRequest(startTime, "", fmt.Sprintf("failed to read request body: %v", err))
-		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		h.logInvalidRequest(startTime, status, "", fmt.Sprintf("failed to read request body: %v", err))
+		http.Error(w, requestBodyErrorMessage(status), status)
 		return
 	}
 
 	// Parse into struct
 	var req models.GenerateRequest
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
-		log.Printf("Generate request: invalid request body: %v\nBody: %s", err, string(bodyBytes))
-		h.logInvalidRequest(startTime, string(bodyBytes), fmt.Sprintf("invalid request body: %v", err))
+		if h.config.Server.LogRawRequests {
+			log.Printf("Generate request: invalid request body: %v\nBody: %s", err, string(bodyBytes))
+		} else {
+			log.Printf("Generate request: invalid request body: %v", err)
+		}
+		h.logInvalidRequest(startTime, http.StatusBadRequest, string(bodyBytes), fmt.Sprintf("invalid request body: %v", err))
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -67,7 +70,7 @@ func (h *GenerateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := applyServerManagedGenerateCompatibility(&req, h.config); err != nil {
-		h.logInvalidRequest(startTime, string(bodyBytes), err.Error())
+		h.logInvalidRequest(startTime, http.StatusBadRequest, string(bodyBytes), err.Error())
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -237,12 +240,12 @@ func (h *GenerateHandler) logRequest(startTime time.Time, req models.GenerateReq
 // logInvalidRequest persists a request that was rejected before it could be parsed
 // into a GenerateRequest (unreadable body or malformed JSON), so it's still visible
 // in the request log instead of vanishing silently.
-func (h *GenerateHandler) logInvalidRequest(startTime time.Time, frontendReq string, errMsg string) {
+func (h *GenerateHandler) logInvalidRequest(startTime time.Time, statusCode int, frontendReq string, errMsg string) {
 	entry := database.LogEntry{
 		Timestamp:       startTime,
 		Endpoint:        "/api/generate",
 		Method:          "POST",
-		StatusCode:      http.StatusBadRequest,
+		StatusCode:      statusCode,
 		LatencyMs:       time.Since(startTime).Milliseconds(),
 		BackendType:     h.config.Backend.Type,
 		Error:           errMsg,

@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.25-bookworm AS builder
+FROM golang:1.25-trixie AS builder
 
 # Set working directory
 WORKDIR /build
@@ -17,7 +17,7 @@ COPY . .
 RUN CGO_ENABLED=0 go build -o llm_proxy .
 
 # Runtime stage
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -25,14 +25,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Create app directory
+# Create the unprivileged runtime account and writable data directory.
 WORKDIR /app
 
-# Copy binary from builder
-COPY --from=builder /build/llm_proxy .
+RUN groupadd --gid 10001 llm-proxy \
+    && useradd --uid 10001 --gid 10001 --home-dir /nonexistent --no-create-home --shell /usr/sbin/nologin llm-proxy \
+    && mkdir -p /app/data /app/config \
+    && chown -R 10001:10001 /app
 
-# Create directories for data and config
-RUN mkdir -p /app/data /app/config
+# Copy binary from builder
+COPY --from=builder --chown=10001:10001 /build/llm_proxy .
+
+USER 10001:10001
 
 # Expose the compatibility-fork example port
 EXPOSE 6666

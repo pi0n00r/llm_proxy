@@ -2,9 +2,14 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
+
+// DefaultMaxRequestBodyBytes permits large prompts and image payloads while
+// preventing a single client request from consuming unbounded memory.
+const DefaultMaxRequestBodyBytes int64 = 32 << 20
 
 // Config represents the application configuration
 type Config struct {
@@ -22,13 +27,14 @@ type Config struct {
 
 // ServerConfig holds the server settings
 type ServerConfig struct {
-	Host            string `toml:"host"`
-	Port            int    `toml:"port"`
-	EnableCORS      bool   `toml:"enable_cors"`
-	LogMessages     bool   `toml:"log_messages"`
-	LogRawRequests  bool   `toml:"log_raw_requests"`
-	LogRawResponses bool   `toml:"log_raw_responses"`
-	Verbose         bool   `toml:"verbose"`
+	Host                string `toml:"host"`
+	Port                int    `toml:"port"`
+	MaxRequestBodyBytes int64  `toml:"max_request_body_bytes"`
+	EnableCORS          bool   `toml:"enable_cors"`
+	LogMessages         bool   `toml:"log_messages"`
+	LogRawRequests      bool   `toml:"log_raw_requests"`
+	LogRawResponses     bool   `toml:"log_raw_responses"`
+	Verbose             bool   `toml:"verbose"`
 }
 
 // BackendConfig holds the backend service settings
@@ -111,6 +117,24 @@ func Load(path string) (*Config, error) {
 	if config.Backend.Type != "openai" && config.Backend.Type != "ollama" {
 		return nil, fmt.Errorf("invalid backend type: %s (must be 'openai' or 'ollama')", config.Backend.Type)
 	}
+	if strings.TrimSpace(config.Backend.Endpoint) == "" {
+		return nil, fmt.Errorf("backend.endpoint must not be empty")
+	}
+	if config.Server.Port < 0 || config.Server.Port > 65535 {
+		return nil, fmt.Errorf("invalid server.port: %d (must be between 0 and 65535)", config.Server.Port)
+	}
+	if config.Server.MaxRequestBodyBytes < 0 {
+		return nil, fmt.Errorf("invalid server.max_request_body_bytes: %d (must be 0 or greater)", config.Server.MaxRequestBodyBytes)
+	}
+	if config.Backend.Timeout < 0 {
+		return nil, fmt.Errorf("invalid backend.timeout: %d (must be 0 or greater)", config.Backend.Timeout)
+	}
+	if config.Database.MaxRequests < 0 {
+		return nil, fmt.Errorf("invalid database.max_requests: %d (must be 0 or greater)", config.Database.MaxRequests)
+	}
+	if config.Database.CleanupInterval < 0 {
+		return nil, fmt.Errorf("invalid database.cleanup_interval: %d (must be 0 or greater)", config.Database.CleanupInterval)
+	}
 
 	// Validate chat text injection mode
 	if config.ChatTextInjection.Mode != "" && config.ChatTextInjection.Mode != "first" && config.ChatTextInjection.Mode != "last" && config.ChatTextInjection.Mode != "system" {
@@ -150,16 +174,19 @@ func Load(path string) (*Config, error) {
 	if config.Server.Port == 0 {
 		config.Server.Port = 11434
 	}
+	if config.Server.MaxRequestBodyBytes == 0 {
+		config.Server.MaxRequestBodyBytes = DefaultMaxRequestBodyBytes
+	}
 	if config.Backend.Timeout == 0 {
 		config.Backend.Timeout = 300
 	}
 	if config.Database.Path == "" {
 		config.Database.Path = "./llm_proxy.db"
 	}
-	if config.Database.MaxRequests == 0 {
+	if !metadata.IsDefined("database", "max_requests") {
 		config.Database.MaxRequests = 100
 	}
-	if config.Database.CleanupInterval == 0 {
+	if !metadata.IsDefined("database", "cleanup_interval") {
 		config.Database.CleanupInterval = 5
 	}
 	if !metadata.IsDefined("database", "store_content") {

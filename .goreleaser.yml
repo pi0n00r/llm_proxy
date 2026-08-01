@@ -5,9 +5,9 @@ version: 2
 
 before:
   hooks:
-    # Ensure dependencies are up to date
-    - go mod tidy
+    # Verify the committed dependency graph without rewriting release sources.
     - go mod download
+    - go mod verify
 
 builds:
   - id: llm_proxy
@@ -98,7 +98,7 @@ dockers_v2:
       "org.opencontainers.image.version": "{{ .Version }}"
       "org.opencontainers.image.source": "https://github.com/pi0n00r/llm_proxy"
       "org.opencontainers.image.description": "LLM Proxy - Ollama-compatible API with multiple backend support"
-      "org.opencontainers.image.licenses": "MIT"
+      "org.opencontainers.image.licenses": "Apache-2.0"
 
 release:
   github:

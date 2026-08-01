@@ -258,6 +258,10 @@
                             <div class="info-value">{{.ServerHost}}:{{.ServerPort}}</div>
                         </div>
                         <div class="info-item">
+                            <div class="info-label">Request Body Limit</div>
+                            <div class="info-value text">{{.MaxRequestBodyBytes}} bytes</div>
+                        </div>
+                        <div class="info-item">
                             <div class="info-label">CORS</div>
                             <div class="info-value text">
                                 {{if .EnableCORS}}<span class="badge badge-on">enabled</span>{{else}}<span class="badge badge-neutral">disabled</span>{{end}}

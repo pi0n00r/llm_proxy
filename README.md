@@ -1,8 +1,15 @@
 # LLM Proxy
 
-A lightweight, Go-based proxy server that provides an Ollama-compatible API while forwarding requests to various LLM backends (OpenAI-compatible APIs like llama.cpp, or actual Ollama instances). Request metadata is logged to SQLite; storing conversation content is optional.
+[![CI](https://github.com/pi0n00r/llm_proxy/actions/workflows/ci.yml/badge.svg)](https://github.com/pi0n00r/llm_proxy/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/pi0n00r/llm_proxy)](https://github.com/pi0n00r/llm_proxy/releases)
+[![Container](https://img.shields.io/badge/container-ghcr.io%2Fpi0n00r%2Fllm__proxy-blue)](https://github.com/pi0n00r/llm_proxy/pkgs/container/llm_proxy)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENCE.md)
 
-The main motivation for creating this was to get the Home Assistant Ollama integration to work with llama.cpp.  I've also always wanted a better way to log requests and responses from other LLM based apps (i.e. Open Web UI).  This proxy has a web interface which shows all of the messages including the full context and the system prompt which is really useful for debugging.
+A compact Go service that presents Ollama and basic OpenAI client APIs in
+front of an OpenAI-compatible or Ollama backend. It is designed for consumers
+such as Home Assistant that expect Ollama semantics while the model is served
+by llama.cpp, vLLM, or another OpenAI-compatible runtime. Request metadata is
+logged to SQLite; retaining conversation content is optional.
 
 ## Features
 
@@ -18,6 +25,7 @@ The main motivation for creating this was to get the Home Assistant Ollama integ
 - **Text Injection** - Automatically inject text into user messages (disabled by default) for example "/nothink" to disable thinking
 - **Tool Blacklist** - Filter out specific tools from chat requests before forwarding to the backend
 - **Request Sanitization** - Drop problematic maximum-token parameters from incoming requests
+- **Bounded Requests** - Applies a configurable request-body limit across all completion endpoints
 - **Docker Support** - Production-ready Docker images with health checks
 - **Minimal Dependencies** - Uses Go plus TOML parsing and a pure-Go SQLite driver; no C compiler is required
 - **Highly Configurable** - Fine-tune logging, timeouts, CORS, database cleanup, and more
@@ -38,29 +46,25 @@ See [docs/fleet-compatibility.md](docs/fleet-compatibility.md) for the exact con
 
 ## Quick Start with Docker
 
-Build the compatibility fork locally so the image contains the additions
-documented above:
-
 ### Using Docker Run
 
 ```bash
-# 1. Fetch the source and create a config file
+# 1. Fetch the example configuration
 git clone https://github.com/pi0n00r/llm_proxy.git
 cd llm_proxy
 cp config.toml.example config.toml
 # Edit config.toml to configure your backend
 
-# 2. Build the image and create the data directory
-docker build -t pi0n00r/llm-proxy:local .
-mkdir -p data
+# 2. Pull the tested release image
+docker pull ghcr.io/pi0n00r/llm_proxy:v0.2.23
 
 # 3. Run the container
 docker run -d \
   --name llm-proxy \
   -p 6666:6666 \
-  -v $(pwd)/config.toml:/app/config/config.toml:ro \
-  -v $(pwd)/data:/app/data \
-  pi0n00r/llm-proxy:local
+  -v "$(pwd)/config.toml:/app/config/config.toml:ro" \
+  -v llm-proxy-data:/app/data \
+  ghcr.io/pi0n00r/llm_proxy:v0.2.23
 ```
 
 ### Using Docker Compose
@@ -72,15 +76,17 @@ version: '3.8'
 
 services:
   llm-proxy:
-    build: .
-    image: pi0n00r/llm-proxy:local
+    image: ghcr.io/pi0n00r/llm_proxy:v0.2.23
     container_name: llm-proxy
     restart: unless-stopped
     ports:
       - "6666:6666"
     volumes:
       - ./config.toml:/app/config/config.toml:ro
-      - ./data:/app/data
+      - llm-proxy-data:/app/data
+
+volumes:
+  llm-proxy-data:
 ```
 
 Then run:
@@ -113,9 +119,9 @@ This proxy is designed to sit between Home Assistant (or any Ollama client) and 
 
 ### Pre-built Binaries
 
-The upstream project's [release binaries](https://github.com/stevelittlefish/llm_proxy/releases)
-do not contain this fork's compatibility additions. Build this fork from
-source or with Docker until a pi0n00r release is published.
+Linux x86-64 binaries and checksums are published on this fork's
+[Releases page](https://github.com/pi0n00r/llm_proxy/releases). The matching
+container package is `ghcr.io/pi0n00r/llm_proxy`.
 
 ### Build from Source
 
@@ -164,6 +170,7 @@ Create a `config.toml` file based on the provided example:
 [server]
 host = "::"
 port = 6666
+max_request_body_bytes = 33554432
 enable_cors = false
 log_messages = false
 log_raw_requests = false
@@ -213,6 +220,7 @@ enabled = false
 #### Server
 - `host`: IP address to bind to (default: `0.0.0.0`). Use `::` for a dual-stack listener on hosts whose network stack permits IPv4-mapped IPv6 sockets.
 - `port`: Port to listen on (application default: `11434`; this fork's example uses reserved compatibility port `6666`)
+- `max_request_body_bytes`: Maximum JSON request body accepted by `/api/chat`, `/api/generate`, and `/v1/chat/completions` (default: `33554432`, or 32 MiB). Oversized requests return HTTP 413.
 - `enable_cors`: Enable CORS middleware (default: `false`) - this will allow any web page to directly access the server via javascript
 - `log_messages`: Log message content in human-readable format to stdout (default: `false`)
 - `log_raw_requests`: Log raw JSON request payloads (pretty-printed) to stdout (default: `false`)
@@ -394,6 +402,14 @@ thinking = "off"
 [gemma_4_fix]
 enabled = true
 ```
+
+## Network Trust Boundary
+
+`llm_proxy` does not provide client authentication or TLS. Run it on a trusted
+network, bind it to loopback, or place it behind an authenticated TLS reverse
+proxy. The inference, web log, download, and logs API routes share this same
+trust boundary. Keep content logging disabled unless the retained prompts and
+responses are intentionally available to every authorized operator.
 
 ## Usage
 
@@ -689,16 +705,5 @@ Each release includes:
 
 ## Contributing
 
-I didn't write that much of the code, my good friend Claude did through the Cline plugin in Visual Studio Code.  It cost me $12.78 in tokens and took around half a day.  Not bad! (EDIT: more like $25 now!)
-
-Contributions are welcome! Please feel free to submit issues and pull requests to the repository.
-
-## Note: 2026-06-19
-
-Wow things have moved so quickly with AI!
-
-I built this in Jan 2026 when I hadn't really used proper AI coding tools before.  I was running Cline with local models, and swapped it over to Claude to build this.  At work I was using a little bit of Copilot but that was it.
-
-Now it's June and I don't write code myself at work any more and rely heavily on Claude Code.  I did the latest batch of updates to this project using Codex and it was so quick and easy.
-
-Fingers crossed, in 6 months time I still have a job and my work hasn't been completely automated!
+Issues and focused pull requests are welcome. Include a regression test when
+changing request translation, streaming behavior, or compatibility semantics.

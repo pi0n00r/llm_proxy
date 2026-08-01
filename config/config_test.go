@@ -226,6 +226,9 @@ endpoint = "http://localhost:11434"
 	if cfg.Server.Port != 11434 {
 		t.Fatalf("Server.Port = %d, want 11434", cfg.Server.Port)
 	}
+	if cfg.Server.MaxRequestBodyBytes != DefaultMaxRequestBodyBytes {
+		t.Fatalf("Server.MaxRequestBodyBytes = %d, want %d", cfg.Server.MaxRequestBodyBytes, DefaultMaxRequestBodyBytes)
+	}
 	if cfg.Backend.Timeout != 300 {
 		t.Fatalf("Backend.Timeout = %d, want 300", cfg.Backend.Timeout)
 	}
@@ -237,6 +240,128 @@ endpoint = "http://localhost:11434"
 	}
 	if cfg.ChatTextInjection.Mode != "last" {
 		t.Fatalf("ChatTextInjection.Mode = %q, want last", cfg.ChatTextInjection.Mode)
+	}
+}
+
+func TestLoadPreservesExplicitDatabaseCleanupZeros(t *testing.T) {
+	path := writeTestConfig(t, `
+[backend]
+type = "openai"
+endpoint = "http://localhost:8008"
+
+[database]
+max_requests = 0
+cleanup_interval = 0
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Database.MaxRequests != 0 || cfg.Database.CleanupInterval != 0 {
+		t.Fatalf("database cleanup values = (%d, %d), want explicit zeros", cfg.Database.MaxRequests, cfg.Database.CleanupInterval)
+	}
+}
+
+func TestLoadServerRequestBodyLimit(t *testing.T) {
+	path := writeTestConfig(t, `
+[server]
+max_request_body_bytes = 1048576
+
+[backend]
+type = "openai"
+endpoint = "http://localhost:8008"
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Server.MaxRequestBodyBytes != 1048576 {
+		t.Fatalf("Server.MaxRequestBodyBytes = %d, want 1048576", cfg.Server.MaxRequestBodyBytes)
+	}
+}
+
+func TestLoadRejectsInvalidOperationalNumbers(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{
+			name: "negative port",
+			content: `
+[server]
+port = -1
+[backend]
+type = "openai"
+endpoint = "http://localhost:8008"
+`,
+			want: "server.port",
+		},
+		{
+			name: "port above range",
+			content: `
+[server]
+port = 65536
+[backend]
+type = "openai"
+endpoint = "http://localhost:8008"
+`,
+			want: "server.port",
+		},
+		{
+			name: "negative request limit",
+			content: `
+[server]
+max_request_body_bytes = -1
+[backend]
+type = "openai"
+endpoint = "http://localhost:8008"
+`,
+			want: "server.max_request_body_bytes",
+		},
+		{
+			name: "negative backend timeout",
+			content: `
+[backend]
+type = "openai"
+endpoint = "http://localhost:8008"
+timeout = -1
+`,
+			want: "backend.timeout",
+		},
+		{
+			name: "negative maximum requests",
+			content: `
+[backend]
+type = "openai"
+endpoint = "http://localhost:8008"
+[database]
+max_requests = -1
+`,
+			want: "database.max_requests",
+		},
+		{
+			name: "negative cleanup interval",
+			content: `
+[backend]
+type = "openai"
+endpoint = "http://localhost:8008"
+[database]
+cleanup_interval = -1
+`,
+			want: "database.cleanup_interval",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Load(writeTestConfig(t, tt.content))
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Load() error = %v, want error containing %q", err, tt.want)
+			}
+		})
 	}
 }
 

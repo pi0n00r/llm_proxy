@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -17,6 +18,12 @@ import (
 	"llm_proxy/handlers"
 	"llm_proxy/middleware"
 	"time"
+)
+
+var (
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
 )
 
 // startCleanupTask runs a periodic cleanup task to remove old database entries
@@ -51,6 +58,7 @@ func main() {
 	// Parse command line flags
 	configPath := flag.String("config", "config.toml", "Path to configuration file")
 	flag.Parse()
+	log.Printf("Starting LLM Proxy %s (commit %s, built %s)", version, commit, date)
 
 	// Load configuration
 	log.Printf("Loading configuration from %s", *configPath)
@@ -113,6 +121,7 @@ func main() {
 		"BackendEndpoint":      cfg.Backend.Endpoint,
 		"ServerHost":           cfg.Server.Host,
 		"ServerPort":           cfg.Server.Port,
+		"MaxRequestBodyBytes":  cfg.Server.MaxRequestBodyBytes,
 		"Timeout":              cfg.Backend.Timeout,
 		"DatabasePath":         cfg.Database.Path,
 		"EnableCORS":           cfg.Server.EnableCORS,
@@ -196,8 +205,11 @@ func main() {
 	}
 
 	server := &http.Server{
-		Addr:    addr,
-		Handler: handler,
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+		MaxHeaderBytes:    1 << 20,
 	}
 
 	// Handle graceful shutdown
@@ -216,16 +228,22 @@ func main() {
 
 	// Wait for interrupt signal
 	<-sigChan
+	signal.Stop(sigChan)
 	log.Println("Shutting down server...")
 
-	// Stop cleanup task
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Graceful shutdown timed out: %v", err)
+		if closeErr := server.Close(); closeErr != nil {
+			log.Printf("Error forcing server close: %v", closeErr)
+		}
+	}
+
+	// Stop cleanup only after active requests have drained and finished logging.
 	if cfg.Database.CleanupInterval > 0 && cfg.Database.MaxRequests > 0 {
 		cleanupDone <- struct{}{}
 		<-cleanupDone
-	}
-
-	if err := server.Close(); err != nil {
-		log.Printf("Error closing server: %v", err)
 	}
 
 	log.Println("Server stopped")

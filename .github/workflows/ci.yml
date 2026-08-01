@@ -21,7 +21,18 @@ jobs:
           go-version: '1.25'
           cache: true
 
+      - name: Check formatting
+        run: test -z "$(gofmt -l .)"
+
+      - name: Run vet
+        env:
+          CGO_ENABLED: '0'
+        run: go vet ./...
+
       - name: Run tests
         env:
           CGO_ENABLED: '0'
-        run: go test ./...
+        run: go test -count=1 -shuffle=on ./...
+
+      - name: Run race detector
+        run: go test -race -count=1 -shuffle=on ./...

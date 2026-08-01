@@ -1,6 +1,8 @@
 [server]
 host = "::"
 port = 6666
+# Maximum JSON request body accepted by completion endpoints (32 MiB).
+max_request_body_bytes = 33554432
 enable_cors = false
 log_messages = false
 log_raw_requests = false

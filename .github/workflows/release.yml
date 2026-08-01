@@ -26,6 +26,17 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      - name: Verify release source
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          test -z "$(gofmt -l .)"
+          go vet ./...
+          go test -count=1 -shuffle=on ./...
+
+      - name: Run race detector
+        run: go test -race -count=1 -shuffle=on ./...
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v4
         with:
