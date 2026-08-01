@@ -25,6 +25,21 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.release_ref || github.ref }}
 
+      - name: Verify release tag
+        env:
+          EXPECTED_TAG: ${{ inputs.release_ref || github.ref_name }}
+        run: test "$(git describe --tags --exact-match)" = "$EXPECTED_TAG"
+
+      - name: Select release configuration
+        id: release-config
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            git show "$GITHUB_SHA:.goreleaser.yml" > "$RUNNER_TEMP/goreleaser.yml"
+            echo "path=$RUNNER_TEMP/goreleaser.yml" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=.goreleaser.yml" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -56,6 +71,6 @@ jobs:
         with:
           distribution: goreleaser
           version: '~> v2'
-          args: release --clean
+          args: release --clean --config ${{ steps.release-config.outputs.path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

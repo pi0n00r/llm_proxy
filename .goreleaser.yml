@@ -91,6 +91,11 @@ dockers_v2:
       - "latest"
     platforms:
       - linux/amd64
+    # A single-platform Docker image preserves Dockerfile HEALTHCHECK metadata.
+    # Provenance/SBOM attestations would force an OCI index for this package.
+    sbom: false
+    flags:
+      - "--provenance=false"
     labels:
       "org.opencontainers.image.created": "{{ .Date }}"
       "org.opencontainers.image.title": "{{ .ProjectName }}"
