@@ -504,6 +504,27 @@ func (o *OpenAIBackend) scanGemma4ChatStream(ctx context.Context, body io.Reader
 			continue
 		}
 
+		role := choice.Delta.Role
+		if role == "" {
+			role = "assistant"
+		}
+
+		// Reasoning arrives on its own field (vLLM's reasoning parser), so it
+		// bypasses the content filter; stop forwarding it once a leak is
+		// suspected, like everything else from a corrupted attempt.
+		if choice.Delta.Thinking != "" && !filter.Suspect() {
+			select {
+			case respChan <- models.ChatResponse{
+				Model:     model,
+				CreatedAt: time.Now(),
+				Message:   models.Message{Role: role, Thinking: choice.Delta.Thinking},
+				Done:      false,
+			}:
+			case <-ctx.Done():
+				return finish()
+			}
+		}
+
 		if choice.Delta.Content == "" {
 			continue
 		}
@@ -516,19 +537,13 @@ func (o *OpenAIBackend) scanGemma4ChatStream(ctx context.Context, body io.Reader
 		tokenCount++
 		forwarded.WriteString(safe)
 
-		role := choice.Delta.Role
-		if role == "" {
-			role = "assistant"
-		}
-
 		select {
 		case respChan <- models.ChatResponse{
 			Model:     model,
 			CreatedAt: time.Now(),
 			Message: models.Message{
-				Role:     role,
-				Content:  safe,
-				Thinking: choice.Delta.Thinking,
+				Role:    role,
+				Content: safe,
 			},
 			Done: false,
 		}:
@@ -587,9 +602,11 @@ func (o *OpenAIBackend) scanGemma4ChatResponse(body io.Reader, respChan chan<- m
 	tokenCount := 0
 	var forwarded strings.Builder
 	if !filter.Suspect() {
-		if safe != "" {
-			tokenCount++
-			forwarded.WriteString(safe)
+		if safe != "" || choice.Message.Thinking != "" {
+			if safe != "" {
+				tokenCount++
+				forwarded.WriteString(safe)
+			}
 			respChan <- models.ChatResponse{
 				Model:     model,
 				CreatedAt: time.Now(),

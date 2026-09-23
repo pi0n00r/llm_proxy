@@ -8,6 +8,7 @@ The main motivation for creating this was to get the Home Assistant Ollama integ
 
 - **Ollama-Compatible API** - Presents an Ollama API interface, compatible with Home Assistant and other Ollama clients
 - **Basic OpenAI-Compatible API** - Provides `/v1/chat/completions` and `/v1/models` frontend endpoints for simple OpenAI-style clients
+- **Reasoning Passthrough** - Backend reasoning (`reasoning`/`reasoning_content` from OpenAI-compatible servers such as vLLM, or Ollama `thinking`) is returned as `thinking` on Ollama endpoints and as `reasoning_content` on `/v1/chat/completions`
 - **Multiple Backend Support** - Connect to OpenAI-compatible APIs (e.g., llama.cpp) or Ollama instances
 - **Streaming Support** - Full support for streaming responses with minimal latency
 - **Request/Response Logging** - All interactions logged to SQLite with timestamps, latency, and error tracking

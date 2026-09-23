@@ -139,7 +139,11 @@ Legitimate prose has already been streamed to and displayed by the client. Re-se
 - Send one additional, minimal follow-up turn "behind the scenes" — not exposed to the client as a literal new chat message, just used internally to drive the next model call — whose purpose is to prompt the model to actually carry out the action it had just described (a short continuation cue is sufficient; exact wording is an open implementation question, see Section 8).
 - Stream that follow-up turn's response to the client as a natural continuation of the assistant's turn. An assistant message followed by a tool call is an unremarkable, normal-looking pattern in any chat UI, so this requires no special client-side handling.
 
-### 5.6 Latency Characteristics
+### 5.6 Reasoning Deltas
+
+Reasoning text separated by vLLM's reasoning parser arrives on its own delta field (`reasoning`, or `reasoning_content` on older vLLM), never in `content`, so it is not routed through the content filter and is forwarded live. Once an attempt is flagged as suspect, its remaining reasoning deltas are withheld along with everything else from that attempt. A retry's reasoning (from the non-streaming response's `message.reasoning`) is forwarded alongside its clean content, so after a recovery the client may see reasoning from more than one attempt, appended in order. Reasoning is never folded into the nudge messages.
+
+### 5.7 Latency Characteristics
 
 - **Unaffected turns (expected majority):** zero added latency — true live, token-by-token streaming, identical to talking to vLLM directly.
 - **Clean-failure turns:** added latency is roughly the length of one short failed generation (observed corrupted segments tend to be brief — on the order of a couple dozen tokens) plus the time to start the retry. No full non-streaming round trip is incurred.

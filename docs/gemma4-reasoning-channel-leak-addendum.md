@@ -27,3 +27,5 @@ Since this is a streaming proxy, the marker tokens won't always land neatly with
 ## Open item
 
 This addendum assumes the wrapped content is always empty, based on observation so far. If a case ever turns up where there's real reasoning text inside the markers, that would change this from "always-safe to discard" to something needing more thought (e.g., whether to expose it via a `reasoning` field instead of dropping it) — worth a quick sanity check before considering this fully closed, but not expected to change the basic approach.
+
+Note: this leak concerns reasoning markers appearing inside `content`. Properly parsed reasoning (vLLM's separate `reasoning`/`reasoning_content` delta field) is unrelated to this filter and is forwarded to clients as-is; see section 5.6 of the main spec.
