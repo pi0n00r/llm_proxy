@@ -131,8 +131,10 @@ func TestDetailsTemplateHasConversationTabsAndAPIHandoff(t *testing.T) {
 		PromptDisplay        string
 		FrontendConversation []renderedLogMessage
 		BackendConversation  []renderedLogMessage
+		ResponseReasoning    string
 	}{
 		LogEntry:             &database.LogEntry{ID: 42, StatusCode: 200, Response: "final answer"},
+		ResponseReasoning:    "pondering the answer",
 		FrontendConversation: []renderedLogMessage{{Role: "user", Parts: []renderedLogPart{{Kind: "text", Text: "hello"}}}},
 		BackendConversation:  []renderedLogMessage{{Role: "assistant", ToolCalls: []renderedToolCall{{Name: "search", Arguments: "{}"}}, Changed: true}},
 	}
@@ -140,7 +142,7 @@ func TestDetailsTemplateHasConversationTabsAndAPIHandoff(t *testing.T) {
 	if err := templates.ExecuteTemplate(&out, "details.html", data); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"Client → Proxy", "Proxy → Backend", "CHANGED BY PROXY", "Tool call", "search", "MODEL RESPONSE", "final answer", "/api/logs/42", "Copy for agent", "document.execCommand('copy')", "Copy failed"} {
+	for _, want := range []string{"Client → Proxy", "Proxy → Backend", "CHANGED BY PROXY", "Tool call", "search", "MODEL RESPONSE", "final answer", "Reasoning", "pondering the answer", "/api/logs/42", "Copy for agent", "document.execCommand('copy')", "Copy failed"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("details page missing %q", want)
 		}
@@ -178,6 +180,23 @@ func TestHomeHandlerHidesBackendSpecificSettings(t *testing.T) {
 	for _, want := range []string{"Force Prompt Cache", "Gemma 4 Fix"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("home page missing %q", want)
+		}
+	}
+}
+
+func TestReasoningFromResponse(t *testing.T) {
+	cases := map[string]struct{ raw, want string }{
+		"openai json":        {`{"choices":[{"message":{"content":"323","reasoning_content":"17*19=323"}}]}`, "17*19=323"},
+		"openai sse":         {"data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"think \"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"reasoning_content\":\"hard\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: [DONE]", "think hard"},
+		"vllm reasoning":     {`{"choices":[{"message":{"reasoning":"hmm"}}]}`, "hmm"},
+		"ollama chat ndjson": {"{\"message\":{\"role\":\"assistant\",\"thinking\":\"a\"}}\n{\"message\":{\"role\":\"assistant\",\"thinking\":\"b\"}}\n{\"message\":{\"content\":\"x\"},\"done\":true}", "ab"},
+		"ollama generate":    {`{"response":"x","thinking":"why"}`, "why"},
+		"none":               {`{"choices":[{"message":{"content":"323"}}]}`, ""},
+		"empty":              {"", ""},
+	}
+	for name, tc := range cases {
+		if got := reasoningFromResponse(tc.raw); got != tc.want {
+			t.Errorf("%s: got %q, want %q", name, got, tc.want)
 		}
 	}
 }

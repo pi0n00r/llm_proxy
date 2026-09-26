@@ -52,6 +52,10 @@ func formatLLMLog(e *database.LogEntry) string {
 	}
 
 	// ── Final response / backend response ────────────────────────────────────
+	if reasoning := reasoningFromResponse(e.FrontendResponse); reasoning != "" {
+		fmt.Fprintf(&b, "## Model Reasoning\n\n%s\n\n", reasoning)
+	}
+
 	if e.Response != "" {
 		fmt.Fprintf(&b, "## Model Response\n\n%s\n\n", e.Response)
 	}

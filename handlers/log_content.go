@@ -341,3 +341,67 @@ func marshalLogMessagesSummary(rawJSON string) string {
 	}
 	return promptSummaryFromMessages(req.Messages)
 }
+
+// reasoningFromResponse extracts model reasoning from a logged response body.
+// It accepts a single JSON object, NDJSON (Ollama streaming) or SSE (OpenAI
+// streaming) and concatenates reasoning from every chunk: OpenAI-style
+// choices[].message/delta "reasoning_content"/"reasoning", Ollama chat
+// message.thinking, and Ollama generate top-level "thinking".
+func reasoningFromResponse(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	var b strings.Builder
+	if appendReasoningChunk(&b, raw) {
+		return strings.TrimSpace(b.String())
+	}
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		line = strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if line == "" || line == "[DONE]" {
+			continue
+		}
+		appendReasoningChunk(&b, line)
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func appendReasoningChunk(b *strings.Builder, raw string) bool {
+	type reasoningFields struct {
+		ReasoningContent string `json:"reasoning_content"`
+		Reasoning        string `json:"reasoning"`
+		Thinking         string `json:"thinking"`
+	}
+	var chunk struct {
+		Thinking string           `json:"thinking"`
+		Message  *reasoningFields `json:"message"`
+		Choices  []struct {
+			Message *reasoningFields `json:"message"`
+			Delta   *reasoningFields `json:"delta"`
+		} `json:"choices"`
+	}
+	if json.Unmarshal([]byte(raw), &chunk) != nil {
+		return false
+	}
+	write := func(f *reasoningFields) {
+		if f == nil {
+			return
+		}
+		switch {
+		case f.ReasoningContent != "":
+			b.WriteString(f.ReasoningContent)
+		case f.Reasoning != "":
+			b.WriteString(f.Reasoning)
+		case f.Thinking != "":
+			b.WriteString(f.Thinking)
+		}
+	}
+	b.WriteString(chunk.Thinking)
+	write(chunk.Message)
+	for _, choice := range chunk.Choices {
+		write(choice.Message)
+		write(choice.Delta)
+	}
+	return true
+}
