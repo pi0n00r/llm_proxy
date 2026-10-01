@@ -1,0 +1,9 @@
+# Reuse the exact deployed runtime base; replace only the Sonyhal-built binary.
+# Before building, verify base image ID sha256:6348f18685d2c36e27bf699075c2e76aef5ceea60917dca8eb4a254f3d9f17c1.
+FROM docker.io/pi0n00r/llm_proxy:0.2.22-6-gc40e572
+
+ARG VCS_REF
+LABEL org.opencontainers.image.revision="${VCS_REF}"
+COPY --chown=10001:10001 dist/llm_proxy /app/llm_proxy
+
+USER 10001:10001

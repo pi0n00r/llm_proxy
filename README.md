@@ -182,6 +182,8 @@ type = "openai"
 endpoint = "http://localhost:8008"
 timeout = 300
 tool_blacklist = []
+# model_alias = "gemma4"
+# upstream_model = "gemma-4-26b-a4b-it-uncensored"
 
 [backend_openai]
 force_prompt_cache = false
@@ -214,6 +216,12 @@ thinking = "passthrough"
 [gemma_4_fix]
 enabled = false
 ```
+
+For a single hot OpenAI-compatible backend model, set both `backend.model_alias`
+and `backend.upstream_model` to expose one stable public name without loading
+another model. Both `/api/tags` and `/v1/models` publish only the alias;
+chat, generate, and show requests translate that name to the exact loaded
+upstream model. If the upstream model disappears, discovery fails closed.
 
 ### Configuration Options
 
