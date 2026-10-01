@@ -97,6 +97,10 @@ func main() {
 		log.Fatalf("Invalid backend type: %s", cfg.Backend.Type)
 	}
 
+	if cfg.Backend.ModelAlias != "" {
+		backendInstance = backend.NewModelAliasBackend(backendInstance, cfg.Backend.ModelAlias, cfg.Backend.UpstreamModel)
+	}
+
 	// Set up HTTP handlers
 	mux := http.NewServeMux()
 

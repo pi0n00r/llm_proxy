@@ -37,6 +37,8 @@ type BackendConfig struct {
 	Endpoint      string   `toml:"endpoint"`
 	Timeout       int      `toml:"timeout"`        // in seconds
 	ToolBlacklist []string `toml:"tool_blacklist"` // List of tool names to filter out
+	ModelAlias    string   `toml:"model_alias"`    // one public model identifier
+	UpstreamModel string   `toml:"upstream_model"` // its exact upstream identifier
 }
 
 // DatabaseConfig holds the database settings
@@ -110,6 +112,12 @@ func Load(path string) (*Config, error) {
 	// Validate backend type
 	if config.Backend.Type != "openai" && config.Backend.Type != "ollama" {
 		return nil, fmt.Errorf("invalid backend type: %s (must be 'openai' or 'ollama')", config.Backend.Type)
+	}
+	if (config.Backend.ModelAlias == "") != (config.Backend.UpstreamModel == "") {
+		return nil, fmt.Errorf("backend.model_alias and backend.upstream_model must be set together")
+	}
+	if config.Backend.ModelAlias != "" && config.Backend.Type != "openai" {
+		return nil, fmt.Errorf("backend.model_alias requires the openai backend")
 	}
 
 	// Validate chat text injection mode

@@ -13,6 +13,10 @@ endpoint = "http://localhost:8008"
 timeout = 300
 tool_blacklist = []
 
+# Optional one-to-one public name for an already loaded OpenAI model.
+# model_alias = "gemma4"
+# upstream_model = "gemma-4-26b-a4b-it-uncensored"
+
 [backend_openai]
 force_prompt_cache = false
 
