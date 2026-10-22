@@ -206,15 +206,9 @@ func (m *Message) UnmarshalJSON(data []byte) error {
 // normal string content. This keeps OpenAI multimodal messages lossless without
 // changing the string-oriented internal API.
 func (m Message) MarshalJSON() ([]byte, error) {
-	content := json.RawMessage(nil)
-	if len(m.RawContent) > 0 && json.Valid(m.RawContent) {
-		content = m.RawContent
-	} else {
-		data, err := json.Marshal(m.Content)
-		if err != nil {
-			return nil, err
-		}
-		content = data
+	content, err := m.contentJSON()
+	if err != nil {
+		return nil, err
 	}
 
 	aux := struct {
@@ -231,6 +225,39 @@ func (m Message) MarshalJSON() ([]byte, error) {
 		ToolCallID: m.ToolCallID,
 	}
 	return json.Marshal(aux)
+}
+
+// marshalOpenAIResponseJSON encodes the message for an OpenAI-compatible
+// response choice. OpenAI itself never returns reasoning text, so Thinking is
+// emitted as "reasoning_content", the de facto field name (DeepSeek, LiteLLM,
+// Open WebUI), instead of Ollama's "thinking".
+func (m Message) marshalOpenAIResponseJSON() ([]byte, error) {
+	content, err := m.contentJSON()
+	if err != nil {
+		return nil, err
+	}
+
+	aux := struct {
+		Role             string          `json:"role"`
+		Content          json.RawMessage `json:"content"`
+		ReasoningContent string          `json:"reasoning_content,omitempty"`
+		ToolCalls        []interface{}   `json:"tool_calls,omitempty"`
+		ToolCallID       string          `json:"tool_call_id,omitempty"`
+	}{
+		Role:             m.Role,
+		Content:          content,
+		ReasoningContent: m.Thinking,
+		ToolCalls:        m.ToolCalls,
+		ToolCallID:       m.ToolCallID,
+	}
+	return json.Marshal(aux)
+}
+
+func (m Message) contentJSON() (json.RawMessage, error) {
+	if len(m.RawContent) > 0 && json.Valid(m.RawContent) {
+		return m.RawContent, nil
+	}
+	return json.Marshal(m.Content)
 }
 
 // ChatResponse represents an Ollama chat response
@@ -439,6 +466,73 @@ type OpenAIChatChoice struct {
 	Message      *Message `json:"message,omitempty"`
 	Index        int      `json:"index"`
 	FinishReason string   `json:"finish_reason,omitempty"`
+}
+
+// UnmarshalJSON decodes a backend choice and maps OpenAI-compatible reasoning
+// fields ("reasoning" from current vLLM/OpenRouter, "reasoning_content" from
+// DeepSeek/older vLLM) into Message.Thinking, the proxy's internal field.
+func (c *OpenAIChatChoice) UnmarshalJSON(data []byte) error {
+	type choiceAlias OpenAIChatChoice
+	if err := json.Unmarshal(data, (*choiceAlias)(c)); err != nil {
+		return err
+	}
+
+	type reasoningFields struct {
+		Reasoning        string `json:"reasoning"`
+		ReasoningContent string `json:"reasoning_content"`
+	}
+	var aux struct {
+		Delta   *reasoningFields `json:"delta"`
+		Message *reasoningFields `json:"message"`
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	applyReasoning := func(m *Message, r *reasoningFields) {
+		if m == nil || r == nil || m.Thinking != "" {
+			return
+		}
+		if r.Reasoning != "" {
+			m.Thinking = r.Reasoning
+		} else {
+			m.Thinking = r.ReasoningContent
+		}
+	}
+	applyReasoning(c.Delta, aux.Delta)
+	applyReasoning(c.Message, aux.Message)
+	return nil
+}
+
+// MarshalJSON encodes the choice for OpenAI-compatible clients, emitting
+// message/delta thinking as "reasoning_content".
+func (c OpenAIChatChoice) MarshalJSON() ([]byte, error) {
+	encode := func(m *Message) (json.RawMessage, error) {
+		if m == nil {
+			return nil, nil
+		}
+		return m.marshalOpenAIResponseJSON()
+	}
+	delta, err := encode(c.Delta)
+	if err != nil {
+		return nil, err
+	}
+	message, err := encode(c.Message)
+	if err != nil {
+		return nil, err
+	}
+
+	aux := struct {
+		Delta        json.RawMessage `json:"delta,omitempty"`
+		Message      json.RawMessage `json:"message,omitempty"`
+		Index        int             `json:"index"`
+		FinishReason string          `json:"finish_reason,omitempty"`
+	}{
+		Delta:        delta,
+		Message:      message,
+		Index:        c.Index,
+		FinishReason: c.FinishReason,
+	}
+	return json.Marshal(aux)
 }
 
 // OpenAIUsage represents token usage information

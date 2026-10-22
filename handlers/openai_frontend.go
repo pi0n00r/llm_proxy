@@ -149,8 +149,9 @@ func (h *OpenAIChatCompletionsHandler) streamResponse(w http.ResponseWriter, mod
 		// delivers the full content and Done:true in the same chunk, so
 		// content must be flushed before checking Done, not skipped by it.
 		content := resp.Message.Content
+		thinking := resp.Message.Thinking
 		toolCalls := normalizeOpenAIToolCalls(resp.Message.ToolCalls, true)
-		if content != "" || len(toolCalls) > 0 {
+		if content != "" || thinking != "" || len(toolCalls) > 0 {
 			fullResponse += content
 			chunk := models.OpenAIChatResponse{
 				ID:      fmt.Sprintf("chatcmpl-%d", startTime.UnixNano()),
@@ -163,6 +164,7 @@ func (h *OpenAIChatCompletionsHandler) streamResponse(w http.ResponseWriter, mod
 						Delta: &models.Message{
 							Role:      "assistant",
 							Content:   content,
+							Thinking:  thinking,
 							ToolCalls: toolCalls,
 						},
 					},
@@ -242,11 +244,13 @@ func (h *OpenAIChatCompletionsHandler) streamResponse(w http.ResponseWriter, mod
 // still gets one combined response).
 func (h *OpenAIChatCompletionsHandler) writeResponse(w http.ResponseWriter, model string, respChan <-chan models.ChatResponse, startTime time.Time, req models.ChatRequest, frontendReq string, backendMeta *backend.BackendMetadata, originalMessages []models.Message, originalLastMessage string) {
 	var fullResponse string
+	var fullThinking strings.Builder
 	var toolCalls []interface{}
 	finishReason := "stop"
 	var usage *models.OpenAIUsage
 	for resp := range respChan {
 		fullResponse += resp.Message.Content
+		fullThinking.WriteString(resp.Message.Thinking)
 		if len(resp.Message.ToolCalls) > 0 {
 			toolCalls = normalizeOpenAIToolCalls(resp.Message.ToolCalls, false)
 		}
@@ -269,6 +273,7 @@ func (h *OpenAIChatCompletionsHandler) writeResponse(w http.ResponseWriter, mode
 				Message: &models.Message{
 					Role:      "assistant",
 					Content:   fullResponse,
+					Thinking:  fullThinking.String(),
 					ToolCalls: toolCalls,
 				},
 				FinishReason: finishReason,

@@ -279,6 +279,7 @@ func (h *WebHandler) DetailsHandler(w http.ResponseWriter, r *http.Request) {
 		PromptDisplay        string
 		FrontendConversation []renderedLogMessage
 		BackendConversation  []renderedLogMessage
+		ResponseReasoning    string
 	}{
 		LogEntry:             entry,
 		NextID:               nextID,
@@ -286,6 +287,7 @@ func (h *WebHandler) DetailsHandler(w http.ResponseWriter, r *http.Request) {
 		PromptDisplay:        promptDisplayForEntry(entry),
 		FrontendConversation: renderedMessagesFromRaw(entry.FrontendRequest),
 		BackendConversation:  renderedMessagesFromRaw(entry.BackendRequest),
+		ResponseReasoning:    reasoningFromResponse(entry.FrontendResponse),
 	}
 	markConversationChanges(data.FrontendConversation, data.BackendConversation)
 

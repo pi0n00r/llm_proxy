@@ -548,8 +548,8 @@ func (o *OpenAIBackend) handleStreamingChat(ctx context.Context, body io.Reader,
 					continue
 				}
 
-				// Handle regular content
-				if choice.Delta.Content != "" {
+				// Handle regular content and reasoning
+				if choice.Delta.Content != "" || choice.Delta.Thinking != "" {
 					tokenCount++
 
 					// Set role to "assistant" if empty

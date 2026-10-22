@@ -561,3 +561,90 @@ func TestOpenAIModelsHandler(t *testing.T) {
 		t.Fatalf("response does not include context_length: %s", rec.Body.String())
 	}
 }
+
+type reasoningChatBackend struct{ fakeChatBackend }
+
+func (reasoningChatBackend) Chat(ctx context.Context, req models.ChatRequest) (<-chan models.ChatResponse, *backend.BackendMetadata, error) {
+	ch := make(chan models.ChatResponse, 3)
+	ch <- models.ChatResponse{Model: req.Model, Message: models.Message{Role: "assistant", Thinking: "Sum S3 "}}
+	ch <- models.ChatResponse{Model: req.Model, Message: models.Message{Role: "assistant", Thinking: "and S5.", Content: "2103"}}
+	ch <- models.ChatResponse{Model: req.Model, Done: true, DoneReason: "stop"}
+	close(ch)
+	return ch, &backend.BackendMetadata{URL: "http://backend/v1/chat/completions"}, nil
+}
+
+func TestOpenAIChatCompletionsHandlerReturnsReasoning(t *testing.T) {
+	for _, stream := range []bool{false, true} {
+		name := "non-streaming"
+		if stream {
+			name = "streaming"
+		}
+		t.Run(name, func(t *testing.T) {
+			db, err := database.New(filepath.Join(t.TempDir(), "llm_proxy.db"))
+			if err != nil {
+				t.Fatalf("database.New() error = %v", err)
+			}
+			defer db.Close()
+
+			handler := NewOpenAIChatCompletionsHandler(reasoningChatBackend{}, db, &config.Config{})
+			body := `{"model":"test-model","messages":[{"role":"user","content":"sum"}],"stream":` + map[bool]string{true: "true", false: "false"}[stream] + `}`
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body)))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+			}
+
+			var content, reasoning, reasoningContent strings.Builder
+			addMessage := func(raw json.RawMessage) {
+				var m struct {
+					Content          string `json:"content"`
+					Reasoning        string `json:"reasoning"`
+					ReasoningContent string `json:"reasoning_content"`
+				}
+				if len(raw) == 0 {
+					return
+				}
+				if err := json.Unmarshal(raw, &m); err != nil {
+					t.Fatalf("failed to decode message %s: %v", raw, err)
+				}
+				content.WriteString(m.Content)
+				reasoning.WriteString(m.Reasoning)
+				reasoningContent.WriteString(m.ReasoningContent)
+			}
+			decodeChoices := func(data string) {
+				var resp struct {
+					Choices []struct {
+						Delta   json.RawMessage `json:"delta"`
+						Message json.RawMessage `json:"message"`
+					} `json:"choices"`
+				}
+				if err := json.Unmarshal([]byte(data), &resp); err != nil {
+					t.Fatalf("failed to decode %s: %v", data, err)
+				}
+				for _, c := range resp.Choices {
+					addMessage(c.Delta)
+					addMessage(c.Message)
+				}
+			}
+
+			if stream {
+				for _, line := range strings.Split(rec.Body.String(), "\n") {
+					data, ok := strings.CutPrefix(line, "data: ")
+					if !ok || data == "[DONE]" {
+						continue
+					}
+					decodeChoices(data)
+				}
+			} else {
+				decodeChoices(rec.Body.String())
+			}
+
+			if content.String() != "2103" {
+				t.Fatalf("content = %q, want 2103", content.String())
+			}
+			if reasoningContent.String() != "Sum S3 and S5." || reasoning.String() != "" {
+				t.Fatalf("reasoning_content = %q, reasoning = %q, want full reasoning in reasoning_content only", reasoningContent.String(), reasoning.String())
+			}
+		})
+	}
+}

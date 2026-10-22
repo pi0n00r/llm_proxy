@@ -260,6 +260,9 @@
         .tool-call { margin-top: 12px; border: 1px solid #d8c8e3; border-radius: 7px; overflow: hidden; background: #fff; }
         .tool-call-header { display: flex; gap: 8px; align-items: center; padding: 9px 12px; background: #eee2f5; color: #63337b; font-weight: 700; }
         .tool-call-id { margin-left: auto; font: 11px "Courier New", monospace; color: #80688c; overflow-wrap: anywhere; }
+        .reasoning { margin-bottom: 12px; border: 1px solid #cfe3d6; border-radius: 7px; background: #fff; }
+        .reasoning summary { padding: 8px 12px; cursor: pointer; color: #5d7466; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+        .reasoning-text { padding: 0 12px 12px; white-space: pre-wrap; color: #5d6d66; font-style: italic; }
         .tool-arguments { margin: 0; padding: 12px; overflow-x: auto; white-space: pre-wrap; font: 12px/1.5 "Courier New", monospace; color: #33283a; }
         .api-handoff { background: #edf7f1; border: 1px solid #c9e4d3; border-left: 5px solid #27ae60; }
         .handoff-command { display: flex; gap: 10px; align-items: stretch; }
@@ -420,16 +423,16 @@
             </div>
         </div>
 
-        {{if or .FrontendConversation .BackendConversation .PromptDisplay .Response}}
+        {{if or .FrontendConversation .BackendConversation .PromptDisplay .Response .ResponseReasoning}}
         <div class="section">
             <div class="section-heading"><h2>Conversation</h2></div>
             <p class="section-note">Client view is shown first. Switch to backend view to inspect transformations and injected content; changed messages are highlighted.</p>
             <div class="tabs" role="tablist">
-                {{if or .FrontendConversation .PromptDisplay .Response}}<button class="tab-button active" type="button" onclick="showConversation('frontend', this)">Client → Proxy</button>{{end}}
-                {{if .BackendConversation}}<button class="tab-button {{if not (or .FrontendConversation .PromptDisplay .Response)}}active{{end}}" type="button" onclick="showConversation('backend', this)">Proxy → Backend</button>{{end}}
+                {{if or .FrontendConversation .PromptDisplay .Response .ResponseReasoning}}<button class="tab-button active" type="button" onclick="showConversation('frontend', this)">Client → Proxy</button>{{end}}
+                {{if .BackendConversation}}<button class="tab-button {{if not (or .FrontendConversation .PromptDisplay .Response .ResponseReasoning)}}active{{end}}" type="button" onclick="showConversation('backend', this)">Proxy → Backend</button>{{end}}
             </div>
 
-            {{if or .FrontendConversation .PromptDisplay .Response}}
+            {{if or .FrontendConversation .PromptDisplay .Response .ResponseReasoning}}
             <div class="tab-panel" id="conversation-frontend">
                 {{if and (not .FrontendConversation) .PromptDisplay}}
                 <article class="conversation-message role-user">
@@ -446,17 +449,18 @@
                     {{if and (not .Parts) (not .ToolCalls)}}<div class="content-placeholder">_(empty message)_</div>{{end}}
                 </article>
                 {{end}}
-                {{if .Response}}
+                {{if or .Response .ResponseReasoning}}
                 <article class="conversation-message role-assistant">
                     <div class="conversation-role"><span class="role-icon">◆</span>assistant <span class="change-badge">MODEL RESPONSE</span></div>
-                    <div class="conversation-text">{{.Response}}</div>
+                    {{if .ResponseReasoning}}<details class="reasoning" open><summary>Reasoning</summary><div class="reasoning-text">{{.ResponseReasoning}}</div></details>{{end}}
+                    {{if .Response}}<div class="conversation-text">{{.Response}}</div>{{end}}
                 </article>
                 {{end}}
             </div>
             {{end}}
 
             {{if .BackendConversation}}
-            <div class="tab-panel {{if or .FrontendConversation .PromptDisplay .Response}}hidden{{end}}" id="conversation-backend">
+            <div class="tab-panel {{if or .FrontendConversation .PromptDisplay .Response .ResponseReasoning}}hidden{{end}}" id="conversation-backend">
                 {{range .BackendConversation}}
                 <article class="conversation-message role-{{.Role}} {{if .Changed}}changed{{end}}">
                     <div class="conversation-role"><span class="role-icon">{{if eq .Role "user"}}●{{else if eq .Role "assistant"}}◆{{else if eq .Role "system"}}⚙{{else if eq .Role "tool"}}⌁{{else}}•{{end}}</span>{{.Role}}{{if .Changed}}<span class="change-badge">CHANGED BY PROXY</span>{{end}}</div>
