@@ -1,3 +1,4 @@
+# Disposable draft-review smoke test; this comment will not be merged.
 # Review draft PRs once they contain a coherent checkpoint, then pause automatic
 # incremental reviews while implementation continues. Maintainers request a
 # final full review explicitly after the PR is frozen.
