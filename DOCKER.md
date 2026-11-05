@@ -11,7 +11,7 @@ This guide explains how to run the LLM proxy server using Docker.
 
 Versioned images for this fork are published at
 `ghcr.io/pi0n00r/llm_proxy`. Prefer an immutable version tag such as
-`v0.2.23` rather than `latest`.
+`v0.2.24` rather than `latest`.
 
 The image runs as unprivileged UID/GID `10001:10001`. A Docker named volume is
 the simplest persistent-storage option because Docker initializes it with the
@@ -21,13 +21,13 @@ writable by UID 10001 before starting the container.
 ## Run the Published Image
 
 ```bash
-docker pull ghcr.io/pi0n00r/llm_proxy:v0.2.23
+docker pull ghcr.io/pi0n00r/llm_proxy:v0.2.24
 docker run -d \
   --name llm-proxy \
   -p 6666:6666 \
   -v "$(pwd)/config.toml:/app/config/config.toml:ro" \
   -v llm-proxy-data:/app/data \
-  ghcr.io/pi0n00r/llm_proxy:v0.2.23
+  ghcr.io/pi0n00r/llm_proxy:v0.2.24
 ```
 
 ## Building from Source

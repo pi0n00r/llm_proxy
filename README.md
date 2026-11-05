@@ -57,7 +57,7 @@ cp config.toml.example config.toml
 # Edit config.toml to configure your backend
 
 # 2. Pull the tested release image
-docker pull ghcr.io/pi0n00r/llm_proxy:v0.2.23
+docker pull ghcr.io/pi0n00r/llm_proxy:v0.2.24
 
 # 3. Run the container
 docker run -d \
@@ -65,7 +65,7 @@ docker run -d \
   -p 6666:6666 \
   -v "$(pwd)/config.toml:/app/config/config.toml:ro" \
   -v llm-proxy-data:/app/data \
-  ghcr.io/pi0n00r/llm_proxy:v0.2.23
+  ghcr.io/pi0n00r/llm_proxy:v0.2.24
 ```
 
 ### Using Docker Compose
@@ -77,7 +77,7 @@ version: '3.8'
 
 services:
   llm-proxy:
-    image: ghcr.io/pi0n00r/llm_proxy:v0.2.23
+    image: ghcr.io/pi0n00r/llm_proxy:v0.2.24
     container_name: llm-proxy
     restart: unless-stopped
     ports:
